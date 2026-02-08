@@ -1,0 +1,441 @@
+﻿<template>
+  <div>
+    <BasicTable
+      @register="registerTable"
+      :rowSelection="rowSelection"
+      :form-config="tableFormConfig"
+    >
+      <template #tableTitle>
+        <!-- 所有角色都显示批量修改按钮（区分文字） -->
+        <div class="batch-btn-container">
+          <a-button
+            type="primary"
+            size="small"
+            @click="handleBatchUpdateReceiveStatus"
+            v-if="!isAdmin && !isCounselor"
+          >
+            是否同意领取
+          </a-button>
+          <a-button
+            type="primary"
+            size="small"
+            @click="handleBatchUpdateReceiveStatus"
+            v-if="(isAdmin || isCounselor) && selectedRowKeys.length > 0"
+          >
+            批量标记为已领取
+          </a-button>
+        </div>
+
+        <!-- 管理员/辅导员端：保留原有新增/导出/导入/批量操作 -->
+        <template v-if="isAdmin || isCounselor">
+          <a-button type="primary" v-auth="'zbu:t_receive:add'" @click="handleAdd" preIcon="ant-design:plus-outlined"> 新增</a-button>
+          <a-button  type="primary" v-auth="'zbu:t_receive:exportXls'" preIcon="ant-design:export-outlined" @click="onExportXls"> 导出</a-button>
+          <j-upload-button type="primary" v-auth="'zbu:t_receive:importExcel'" preIcon="ant-design:import-outlined" @click="onImportXls">导入</j-upload-button>
+          <a-dropdown v-if="selectedRowKeys.length > 0">
+            <template #overlay>
+              <a-menu>
+                <a-menu-item key="1" @click="batchHandleDelete">
+                  <Icon icon="ant-design:delete-outlined"></Icon>
+                  删除
+                </a-menu-item>
+              </a-menu>
+            </template>
+            <a-button v-auth="'zbu:t_receive:deleteBatch'">批量操作
+              <Icon icon="mdi:chevron-down"></Icon>
+            </a-button>
+          </a-dropdown>
+        </template>
+        <super-query v-if="isAdmin || isCounselor" :config="superQueryConfig" @search="handleSuperQuery" />
+      </template>
+
+      <!-- 学生端不渲染操作列的模板 -->
+      <template #action="{ record }" v-if="!isStudent">
+        <TableAction :actions="getTableAction(record)" :dropDownActions="getDropDownAction(record)"/>
+      </template>
+
+      <template v-slot:bodyCell="{ column, record, index, text }">
+        <template v-if="column.dataIndex === 'studentNo'">
+          {{ record.studentNo || '未知学号' }}
+        </template>
+        <template v-if="column.dataIndex === 'studentName'">
+          {{ record.studentName || '未知姓名' }}
+        </template>
+        <template v-if="column.dataIndex === 'textbookName'">
+          {{ record.textbookName || '未知教材' }}
+        </template>
+        <template v-if="column.dataIndex === 'receiveStatus'">
+          {{ record.receiveStatus === '1' ? '已领取' : '未领取' }}
+        </template>
+      </template>
+    </BasicTable>
+
+    <TReceiveModal
+      v-if="isAdmin || isCounselor || isStudentEdit"
+      @register="registerModal"
+      @success="handleSuccess"
+      :isStudentEdit="isStudentEdit"
+    ></TReceiveModal>
+  </div>
+</template>
+
+<script lang="ts" name="zbu-tReceive" setup>
+import {ref, reactive, computed, unref, onMounted} from 'vue';
+import {BasicTable, useTable, TableAction} from '/@/components/Table';
+import {useModal} from '/@/components/Modal';
+import { useListPage } from '/@/hooks/system/useListPage'
+import TReceiveModal from './components/TReceiveModal.vue'
+import {columns, searchFormSchema, superQuerySchema} from './TReceive.data';
+import {
+  deleteOne, batchDelete, getImportUrl, getExportUrl, getMyReceive,
+  getStudentById, getSubscriptionById, getTextbookById, getStudentByNo,
+  batchUpdateReceiveStatus
+} from './TReceive.api';
+import { useUserStore } from '/@/store/modules/user';
+// 🌟 关键修改：只保留JeecgBoot封装的useMessage，放弃所有antd原生导入
+import { useMessage } from '/@/hooks/web/useMessage';
+import { getDateByPicker } from '/@/utils';
+
+type Recordable = { [key: string]: any };
+const fieldPickers = reactive({});
+const queryParam = reactive<any>({});
+// 🌟 恢复JeecgBoot封装的createMessage
+const { createMessage } = useMessage();
+
+const [registerModal, {openModal}] = useModal();
+const isStudentEdit = ref(false);
+const currentStudentId = ref("");
+const currentStudentInfo = ref<Recordable>({});
+
+// ========== 核心：角色判断逻辑（不变） ==========
+const userStore = useUserStore();
+const userRoleType = computed(() => {
+  const userInfo = userStore.getUserInfo || {};
+  const roleCode = (userInfo.roleCode || "").toLowerCase().trim();
+  const username = (userInfo.username || "").toLowerCase().trim();
+
+  if (['admin', 'sysadmin'].includes(username) || roleCode.includes('admin')) {
+    return 'admin';
+  }
+  if (roleCode.includes('counselor') || roleCode.includes('daoyuan')) {
+    return 'counselor';
+  }
+  return 'student';
+});
+
+const isAdmin = computed(() => unref(userRoleType) === 'admin');
+const isCounselor = computed(() => unref(userRoleType) === 'counselor');
+const isStudent = computed(() => unref(userRoleType) === 'student');
+
+// ========== 表单配置（不变） ==========
+const tableFormConfig = computed(() => ({
+  schemas: unref(isAdmin) || unref(isCounselor) ? searchFormSchema : [],
+  show: unref(isAdmin) || unref(isCounselor),
+  showAdvancedButton: unref(isAdmin) || unref(isCounselor),
+  showSearchButton: unref(isAdmin) || unref(isCounselor),
+  showResetButton: unref(isAdmin) || unref(isCounselor),
+  autoSubmitOnEnter: true,
+  submitButtonProps: { label: '查询' },
+  resetButtonProps: { label: '重置' }
+}));
+
+// ========== 安全获取学生信息（不变） ==========
+const getStudentInfoSafely = async (studentNo: string) => {
+  try {
+    if (!studentNo) return null;
+    const res = await getStudentByNo(studentNo);
+    return res?.success ? res.result : null;
+  } catch (e) {
+    console.debug("【非关键错误】按学号查询学生失败：", e.message);
+    return null;
+  }
+};
+
+// ========== 获取表格数据（不变） ==========
+const fetchTableData = async (params = {}) => {
+  try {
+    const roleType = unref(userRoleType);
+    console.log(`【领取表-${roleType}端】开始获取数据，参数：`, params);
+
+    const res = await getMyReceive(params);
+    const rawRecords = res?.success ? res.result : (Array.isArray(res) ? res : []);
+
+    if (rawRecords.length === 0) {
+      return {records: [], total: 0};
+    }
+
+    if (unref(isStudent)) {
+      const userInfo = userStore.getUserInfo || {};
+      const studentNo = userInfo.username || "";
+      if (studentNo) {
+        const studentInfo = await getStudentInfoSafely(studentNo);
+        if (studentInfo) {
+          currentStudentInfo.value = studentInfo;
+          currentStudentId.value = studentInfo.id || studentInfo.studentId || studentNo;
+        } else {
+          currentStudentId.value = rawRecords[0]?.receiveOperator || studentNo;
+        }
+      }
+    }
+
+    const formattedRecords: Recordable[] = [];
+    for (const item of rawRecords) {
+      let studentNo = '未知学号';
+      let studentName = '未知姓名';
+      let textbookName = '未知教材';
+
+      if (item.receiveOperator) {
+        try {
+          const studentInfo = await getStudentById(item.receiveOperator);
+          studentNo = studentInfo?.studentId || studentInfo?.result?.studentId || '未知学号';
+          studentName = studentInfo?.studentName || studentInfo?.result?.studentName || '未知姓名';
+        } catch (e) {
+          console.debug("查询学生信息失败：", e.message);
+        }
+      }
+      if (item.subscriptionId) {
+        try {
+          const subscriptionInfo = await getSubscriptionById(item.subscriptionId);
+          const textbookId = subscriptionInfo?.textbookId || subscriptionInfo?.result?.textbookId || "";
+          if (textbookId) {
+            const textbookInfo = await getTextbookById(textbookId);
+            textbookName = textbookInfo?.textbookName || textbookInfo?.result?.textbookName || '未知教材';
+          }
+        } catch (e) {
+          console.debug("查询教材信息失败：", e.message);
+        }
+      }
+
+      formattedRecords.push({
+        ...item,
+        studentNo,
+        studentName,
+        textbookName,
+        receiveStatus: item.receiveStatus || '0',
+        receiveStatus_dictText: item.receiveStatus === '1' ? '已领取' : '未领取',
+        key: item.id || Math.random().toString(36).substr(2, 9)
+      });
+    }
+
+    let filteredRecords = [...formattedRecords];
+    if ((unref(isAdmin) || unref(isCounselor)) && Object.keys(params).length > 0) {
+      if (params.receiveOperator) {
+        const searchKey = params.receiveOperator.trim().toLowerCase();
+        filteredRecords = filteredRecords.filter(item =>
+          item.studentNo.toLowerCase().includes(searchKey) ||
+          item.studentName.toLowerCase().includes(searchKey)
+        );
+      }
+      if (params.subscriptionId) {
+        const searchKey = params.subscriptionId.trim().toLowerCase();
+        filteredRecords = filteredRecords.filter(item =>
+          item.textbookName.toLowerCase().includes(searchKey)
+        );
+      }
+      if (params.receiveStatus) {
+        const statusList = Array.isArray(params.receiveStatus)
+          ? params.receiveStatus
+          : [params.receiveStatus];
+        filteredRecords = filteredRecords.filter(item =>
+          statusList.includes(item.receiveStatus)
+        );
+      }
+    }
+
+    return {
+      records: filteredRecords,
+      total: filteredRecords.length
+    };
+  } catch (e) {
+    console.error('【获取领取数据异常】：', e);
+    createMessage.error('获取领取记录失败：' + (e.message || '网络异常'));
+    return {records: [], total: 0};
+  }
+};
+
+// ========== 注册表格（不变） ==========
+const { prefixCls, tableContext, onExportXls, onImportXls } = useListPage({
+  tableProps:{
+    title: '领取表',
+    api: fetchTableData,
+    columns,
+    canResize:true,
+    rowKey: 'id',
+    formConfig: {
+      schemas: searchFormSchema,
+      autoSubmitOnEnter:true,
+      showAdvancedButton: true,
+      fieldMapToNumber: [],
+      fieldMapToTime: [],
+      show: false
+    },
+    actionColumn: unref(isAdmin) || unref(isCounselor) ? {
+      width: 120,
+      fixed:'right'
+    } : undefined,
+    beforeFetch: (params) => {
+      if (params && fieldPickers) {
+        for (let key in fieldPickers) {
+          if (params[key]) {
+            params[key] = getDateByPicker(params[key], fieldPickers[key]);
+          }
+        }
+      }
+      return Object.assign(params, queryParam);
+    },
+  },
+  exportConfig: {
+    name:"领取表",
+    url: getExportUrl,
+    params: queryParam,
+    show: unref(isAdmin) || unref(isCounselor)
+  },
+  importConfig: {
+    url: getImportUrl,
+    success: handleSuccess,
+    show: unref(isAdmin) || unref(isCounselor)
+  },
+});
+
+const [registerTable, {reload}, { rowSelection, selectedRowKeys }] = tableContext;
+const superQueryConfig = reactive(superQuerySchema);
+
+// ========== 批量修改领取状态：🌟 核心修改（去掉所有loading，彻底无报错） ==========
+const handleBatchUpdateReceiveStatus = async () => {
+  try {
+    let receiveIds: string[] = [];
+    const tableData = await fetchTableData();
+
+    // 1. 分角色处理数据筛选
+    if (unref(isStudent)) {
+      // 学生端：筛选自己的未领取记录
+      const validRecords = tableData.records.filter(item => {
+        const isUnReceived = item.receiveStatus !== '1' && item.receiveStatus !== '已领取';
+        const isOwnRecord = item.receiveOperator === currentStudentId.value;
+        return isUnReceived && isOwnRecord;
+      });
+      receiveIds = validRecords.map(item => item.id).filter(Boolean);
+    } else {
+      // 管理员/辅导员端：筛选选中的未领取记录
+      if (selectedRowKeys.value.length === 0) {
+        createMessage.info("请先选中要修改的记录！");
+        return;
+      }
+      const validRecords = tableData.records.filter(item => {
+        const isUnReceived = item.receiveStatus !== '1' && item.receiveStatus !== '已领取';
+        const isSelected = selectedRowKeys.value.includes(item.id);
+        return isUnReceived && isSelected;
+      });
+      receiveIds = validRecords.map(item => item.id).filter(Boolean);
+    }
+
+    // 2. 无数据判断
+    if (receiveIds.length === 0) {
+      const tipMsg = unref(isStudent)
+        ? "暂无属于你的未领取记录需要修改！"
+        : "暂无选中的未领取记录需要修改！";
+      createMessage.info(tipMsg);
+      return;
+    }
+
+    // 🌟 关键修改：去掉所有loading相关代码，直接调用接口
+    const res = await batchUpdateReceiveStatus({
+      ids: receiveIds,
+      receiveStatus: '1',
+      receiveOperator: unref(isStudent) ? currentStudentId.value : userStore.getUserInfo.id
+    });
+    createMessage.success(res.msg || `成功修改${receiveIds.length}条记录的领取状态！`);
+
+    reload();
+  } catch (e: any) {
+    console.error("【批量修改领取状态失败】：", e);
+    const errorMsg = e.msg || e.message || "";
+    if (errorMsg.includes("无权限")) {
+      createMessage.error("你没有权限修改该记录！");
+    } else if (errorMsg.includes("无数据被更新")) {
+      createMessage.info("暂无未领取的记录需要修改！");
+    } else {
+      createMessage.error(errorMsg || '领取状态修改失败，请重试！');
+    }
+  }
+};
+
+// ========== 工具函数（不变） ==========
+function handleSuperQuery(params) {
+  Object.keys(params).map((k) => {
+    queryParam[k] = params[k];
+  });
+  reload();
+}
+
+function handleAdd() {
+  isStudentEdit.value = false;
+  openModal(true, {isUpdate: false, showFooter: true,});
+}
+
+function handleEdit(record: Recordable) {
+  isStudentEdit.value = !(unref(isAdmin) || unref(isCounselor));
+  openModal(true, {record, isUpdate: true, showFooter: true,});
+}
+
+function handleDetail(record: Recordable) {
+  isStudentEdit.value = false;
+  openModal(true, {record, isUpdate: true, showFooter: false,});
+}
+
+async function handleDelete(record) {
+  await deleteOne({id: record.id}, handleSuccess);
+}
+
+async function batchHandleDelete() {
+  await batchDelete({ids: selectedRowKeys.value}, handleSuccess);
+}
+
+function handleSuccess() {
+  isStudentEdit.value = false;
+  selectedRowKeys.value = [];
+  reload();
+}
+
+function getTableAction(record) {
+  if (unref(isAdmin) || unref(isCounselor)) {
+    return [{label: '编辑',onClick: handleEdit.bind(null, record),auth: 'zbu:t_receive:edit'}];
+  } else {
+    return [];
+  }
+}
+
+function getDropDownAction(record) {
+  if (unref(isAdmin) || unref(isCounselor)) {
+    return [
+      {label: '详情',onClick: handleDetail.bind(null, record),},
+      {label: '删除',popConfirm: {title: '是否确认删除',confirm: handleDelete.bind(null, record),placement: 'topLeft',},auth: 'zbu:t_receive:delete'}
+    ];
+  } else {
+    return [];
+  }
+}
+
+// ========== 初始化（不变） ==========
+onMounted(async () => {
+  let waitCount = 0;
+  while (!userStore.getUserInfo?.roleCode && waitCount < 10) {
+    await new Promise(resolve => setTimeout(resolve, 100));
+    waitCount++;
+  }
+
+  console.log('【领取表-完整用户信息】', userStore.getUserInfo);
+  console.log('【领取表-用户名】', userStore.getUserInfo?.username);
+  console.log('【领取表-角色码原始值】', userStore.getUserInfo?.roleCode);
+  console.log('【领取表-最终识别角色类型】', unref(userRoleType));
+
+  reload();
+});
+</script>
+
+<style lang="less" scoped>
+:deep(.ant-picker),:deep(.ant-input-number){width: 100%;}
+:deep(.ant-table-actions .ant-btn-primary) {padding: 0 8px;margin-right: 4px;}
+.batch-btn-container {display: flex;justify-content: flex-start;width: 100%;padding-left: 8px;margin-right: 12px;}
+:deep(.ant-table-title) {display: flex;justify-content: flex-start;align-items: center;padding: 16px 24px !important;}
+:deep(.ant-form-item-control-input-content) {display: flex;gap: 8px;}
+</style>
