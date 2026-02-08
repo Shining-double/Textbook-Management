@@ -85,7 +85,7 @@ export const columns: BasicColumn[] = [
 //查询数据
 export const searchFormSchema: FormSchema[] = [
 	{
-      label: "征订号或书号（ISBN)",
+      label: "征订号或书号",
       field: 'isbn',
       component: 'Input',
       //colProps: {span: 6},
