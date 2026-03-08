@@ -78,15 +78,15 @@
               if(!value){
                 return Promise.resolve();
               }
-              //不能使用系统密码作为新密码
-              if(value === oldPassword.value){
-                return Promise.reject('不能使用系统密码作为新密码!');
-              }
-              //密码由8位数字、大小写字母和特殊符号组成
-              let reg = /^(?=.*[a-zA-Z])(?=.*\d)(?=.*[~!@#$%^&*()_+`\-={}:";'<>?,./]).{8,}$/;
-              if(!reg.test(value)){
-                return Promise.reject('密码由 8 位及以上数字、大小写字母和特殊符号组成！');
-              }
+              // //不能使用系统密码作为新密码
+              // if(value === oldPassword.value){
+              //   return Promise.reject('不能使用系统密码作为新密码!');
+              // }
+              // //密码由8位数字、大小写字母和特殊符号组成
+              // let reg = /^(?=.*[a-zA-Z])(?=.*\d)(?=.*[~!@#$%^&*()_+`\-={}:";'<>?,./]).{8,}$/;
+              // if(!reg.test(value)){
+              //   return Promise.reject('密码由 8 位及以上数字、大小写字母和特殊符号组成！');
+              // }
               return Promise.resolve();
             }
           },

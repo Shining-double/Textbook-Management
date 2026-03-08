@@ -779,7 +779,7 @@ public class SysUserController {
 	/**
 	 * 首页用户重置密码
 	 */
-    @RequiresPermissions("system:user:updatepwd")
+//    @RequiresPermissions("system:user:updatepwd")
     @RequestMapping(value = "/updatePassword", method = RequestMethod.PUT)
 	public Result<?> updatePassword(@RequestBody JSONObject json) {
 		String username = json.getString("username");
