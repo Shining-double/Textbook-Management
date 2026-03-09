@@ -59,6 +59,10 @@ import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.io.UnsupportedEncodingException;
 import java.net.URLEncoder;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -112,6 +116,12 @@ public class SysUserController {
     private JeecgRedisClient jeecgRedisClient;
     @Autowired
     private JeecgBaseConfig jeecgBaseConfig;
+
+    @Autowired
+    private ISysRoleService sysRoleService;
+
+    @Autowired
+    private javax.sql.DataSource dataSource;
     
     /**
      * 获取租户下用户数据（支持租户隔离）
@@ -2195,4 +2205,103 @@ public class SysUserController {
         }
         return Result.OK("no");
     }
+
+
+    /**
+     * 获取辅导员管理的学生用户ID列表
+     *
+     * @return
+     */
+    @RequestMapping(value = "/getCounselorStudents", method = RequestMethod.GET)
+    public Result<List<String>> getCounselorStudents() {
+        try {
+            LoginUser loginUser = (LoginUser) SecurityUtils.getSubject().getPrincipal();
+            if (loginUser == null) {
+                return Result.error("用户未登录，请先登录！");
+            }
+
+            // 获取当前登录用户信息
+            SysUser currentUser = this.sysUserService
+                    .getOne(new LambdaQueryWrapper<SysUser>().eq(SysUser::getUsername, loginUser.getUsername()));
+            if (currentUser == null) {
+                return Result.error("当前用户不存在！");
+            }
+
+            // 检查当前用户是否为辅导员
+            boolean isCounselor = false;
+            List<SysUserRole> userRoleList = sysUserRoleService
+                    .list(new LambdaQueryWrapper<SysUserRole>().eq(SysUserRole::getUserId, currentUser.getId()));
+            if (!userRoleList.isEmpty()) {
+                List<String> roleIds = userRoleList.stream().map(SysUserRole::getRoleId).collect(Collectors.toList());
+                List<SysRole> roleList = sysRoleService.listByIds(roleIds);
+                for (SysRole role : roleList) {
+                    if ("counselor".equals(role.getRoleCode())) {
+                        isCounselor = true;
+                        break;
+                    }
+                }
+            }
+
+            // 如果不是辅导员，返回空列表
+            if (!isCounselor) {
+                return Result.OK(new ArrayList<String>());
+            }
+
+            // 使用JDBC直接查询数据库
+            List<String> studentUserIds = new ArrayList<>();
+            try (Connection conn = dataSource.getConnection()) {
+                // 1. 通过sys_user.id查询辅导员信息
+                String counselorSql = "SELECT id FROM t_counselor WHERE user_id = ?";
+                try (PreparedStatement ps = conn.prepareStatement(counselorSql)) {
+                    ps.setString(1, currentUser.getId());
+                    try (ResultSet rs = ps.executeQuery()) {
+                        if (!rs.next()) {
+                            log.warn("当前登录用户未关联辅导员信息，用户ID: {}", currentUser.getId());
+                            return Result.OK(new ArrayList<String>());
+                        }
+                        String counselorId = rs.getString("id");
+
+                        // 2. 查询该辅导员管理的所有班级
+                        String classSql = "SELECT id FROM t_class WHERE counselor_id = ?";
+                        List<String> classIds = new ArrayList<>();
+                        try (PreparedStatement classPs = conn.prepareStatement(classSql)) {
+                            classPs.setString(1, counselorId);
+                            try (ResultSet classRs = classPs.executeQuery()) {
+                                while (classRs.next()) {
+                                    classIds.add(classRs.getString("id"));
+                                }
+                            }
+                        }
+                        if (classIds.isEmpty()) {
+                            log.info("辅导员暂无管理的班级");
+                            return Result.OK(new ArrayList<String>());
+                        }
+
+                        // 3. 查询这些班级下的所有学生
+                        String studentSql = "SELECT user_id FROM t_student WHERE class_id IN (" +
+                                String.join(",", Collections.nCopies(classIds.size(), "?")) + ")";
+                        try (PreparedStatement studentPs = conn.prepareStatement(studentSql)) {
+                            for (int i = 0; i < classIds.size(); i++) {
+                                studentPs.setString(i + 1, classIds.get(i));
+                            }
+                            try (ResultSet studentRs = studentPs.executeQuery()) {
+                                while (studentRs.next()) {
+                                    studentUserIds.add(studentRs.getString("user_id"));
+                                }
+                            }
+                        }
+                    }
+                }
+            } catch (SQLException e) {
+                log.error("数据库查询失败：", e);
+                return Result.error("获取学生列表失败：" + e.getMessage());
+            }
+
+            return Result.OK(studentUserIds);
+        } catch (Exception e) {
+            log.error("获取辅导员管理的学生列表失败：", e);
+            return Result.error("获取学生列表失败：" + e.getMessage());
+        }
+    }
+
 }
