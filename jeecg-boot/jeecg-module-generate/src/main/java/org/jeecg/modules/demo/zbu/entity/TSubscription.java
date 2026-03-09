@@ -82,10 +82,10 @@ public class TSubscription implements Serializable {
     @Schema(description = "征订操作时间")
     private java.util.Date subscribeTime;
 	/**征订截止时间*/
-	@Excel(name = "征订截止时间", width = 20, format = "yyyy-MM-dd HH:mm:ss")
-	@JsonFormat(timezone = "GMT+8",pattern = "yyyy-MM-dd HH:mm:ss")
-    @DateTimeFormat(pattern="yyyy-MM-dd HH:mm:ss")
-    @Schema(description = "征订截止时间")
+//	@Excel(name = "征订截止时间", width = 20, format = "yyyy-MM-dd HH:mm:ss")
+//	@JsonFormat(timezone = "GMT+8",pattern = "yyyy-MM-dd HH:mm:ss")
+//    @DateTimeFormat(pattern="yyyy-MM-dd HH:mm:ss")
+//    @Schema(description = "征订截止时间")
     private java.util.Date deadline;
 	/**创建日期*/
 	@JsonFormat(timezone = "GMT+8",pattern = "yyyy-MM-dd HH:mm:ss")

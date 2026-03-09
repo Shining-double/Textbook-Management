@@ -61,11 +61,11 @@ export const columns: BasicColumn[] = [
     align:"center",
     dataIndex: 'subscribeTime'
    },
-   {
-    title: '征订截止时间',
-    align:"center",
-    dataIndex: 'deadline'
-   },
+   // {
+   //  title: '征订截止时间',
+   //  align:"center",
+   //  dataIndex: 'deadline'
+   // },
    {
     title: '创建日期',
     align:"center",
@@ -259,7 +259,7 @@ export const superQuerySchema = {
   subscribeStatus: {title: '征订状态',order: 6,view: 'list', type: 'string',dictCode: 'subscribe_status',},
   remark: {title: '征订备注',order: 7,view: 'text', type: 'string',},
   subscribeTime: {title: '征订操作时间',order: 8,view: 'datetime', type: 'string',},
-  deadline: {title: '征订截止时间',order: 9,view: 'datetime', type: 'string',},
+  // deadline: {title: '征订截止时间',order: 9,view: 'datetime', type: 'string',},
   createTime: {title: '创建日期',order: 10,view: 'datetime', type: 'string',},
   updateTime: {title: '更新日期',order: 11,view: 'datetime', type: 'string',},
 };
