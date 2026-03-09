@@ -99,7 +99,7 @@
   import { useMessage } from '/@/hooks/web/useMessage';
   import { getCaptcha, passwordChange, phoneVerify } from '/@/api/sys/user';
   import logoImg from '/@/assets/loginmini/icon/jeecg_logo.png'
-  import adTextImg from '/@/assets/loginmini/icon/jeecg_ad_text.png'
+  // import adTextImg from '/@/assets/loginmini/icon/jeecg_ad_text.png'
   import successImg from '/@/assets/loginmini/icon/icon-success.png'
   import CaptchaModal from '@/components/jeecg/captcha/CaptchaModal.vue';
   import { useModal } from "@/components/Modal";

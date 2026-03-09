@@ -4,7 +4,8 @@
 }
 
 .aui-container {
-  max-width: 1000px;
+  //max-width: 1000px;
+  max-width: 400px;
   margin: 0 auto;
   box-shadow: 0 4px 8px 1px rgba(0, 0, 0, 0.2);
   position: fixed;
@@ -21,32 +22,38 @@
 
 .aui-form {
   width: 100%;
-  background: #eee;
+  //background: #eee;
+  background: transparent;
   display: -webkit-box;
   display: -moz-box;
   display: -ms-flexbox;
   display: -webkit-flex;
   display: flex;
+  justify-content: center; // 修改内容
 }
 
-.aui-image {
-  padding: 180px 80px;
-  flex-basis: 60%;
-  -webkit-flex-basis: 60%;
-  background-color: #0198cd;
-  background-image: url(../icon/jeecg_ad.png);
-  background-size: cover;
-}
-
-.aui-image-text {
-  top: 50%;
-  left: 50%;
-  width: 100%;
-}
+//.aui-image {
+//  padding: 180px 80px;
+//  flex-basis: 60%;
+//  -webkit-flex-basis: 60%;
+//  background-color: #0198cd;
+//  background-image: url(../icon/jeecg_ad.png);
+//  background-size: cover;
+//}
+//
+//.aui-image-text {
+//  top: 50%;
+//  left: 50%;
+//  width: 100%;
+//}
 
 .aui-formBox {
-  flex-basis: 40%;
-  -webkit-flex-basis: 40%;
+  //flex-basis: 40%;
+  //-webkit-flex-basis: 40%;
+  flex-basis: 100%;
+  max-width: 400px;
+  -webkit-flex-basis: 100%;
+
   box-sizing: border-box;
   padding: 30px 20px;
   background: #fff;

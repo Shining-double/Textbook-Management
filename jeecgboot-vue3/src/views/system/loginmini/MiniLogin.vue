@@ -16,21 +16,21 @@
       <div class="aui-content">
         <div class="aui-container">
           <div class="aui-form">
-            <div class="aui-image">
-              <div class="aui-image-text">
-                <img :src="adTextImg" />
-              </div>
-            </div>
+<!--            <div class="aui-image">-->
+<!--              <div class="aui-image-text">-->
+<!--                <img :src="adTextImg" />-->
+<!--              </div>-->
+<!--            </div>-->
             <div class="aui-formBox">
               <div class="aui-formWell">
-                <div class="aui-flex aui-form-nav investment_title">
-                  <div class="aui-flex-box" :class="activeIndex === 'accountLogin' ? 'activeNav on' : ''" @click="loginClick('accountLogin')"
-                    >{{ t('sys.login.signInFormTitle') }}
-                  </div>
-                  <div class="aui-flex-box" :class="activeIndex === 'phoneLogin' ? 'activeNav on' : ''" @click="loginClick('phoneLogin')"
-                    >{{ t('sys.login.mobileSignInFormTitle') }}
-                  </div>
-                </div>
+<!--                <div class="aui-flex aui-form-nav investment_title">-->
+<!--                  <div class="aui-flex-box" :class="activeIndex === 'accountLogin' ? 'activeNav on' : ''" @click="loginClick('accountLogin')"-->
+<!--                    >{{ t('sys.login.signInFormTitle') }}-->
+<!--                  </div>-->
+<!--                  <div class="aui-flex-box" :class="activeIndex === 'phoneLogin' ? 'activeNav on' : ''" @click="loginClick('phoneLogin')"-->
+<!--                    >{{ t('sys.login.mobileSignInFormTitle') }}-->
+<!--                  </div>-->
+<!--                </div>-->
                 <div class="aui-form-box" style="height: 240px">
                   <a-form ref="loginRef" :model="formData" v-if="activeIndex === 'accountLogin'" @keyup.enter.native="loginHandleClick">
                     <div class="aui-account">
@@ -75,9 +75,9 @@
                             <a-checkbox v-model:checked="rememberMe">{{ t('sys.login.rememberMe') }}</a-checkbox>
                           </div>
                         </div>
-                        <div class="aui-forget">
-                          <a @click="forgetHandelClick"> {{ t('sys.login.forgetPassword') }}</a>
-                        </div>
+<!--                        <div class="aui-forget">-->
+<!--                          <a @click="forgetHandelClick"> {{ t('sys.login.forgetPassword') }}</a>-->
+<!--                        </div>-->
                       </div>
                     </div>
                   </a-form>
@@ -115,43 +115,43 @@
                     <a-button :loading="loginLoading" class="aui-link-login" type="primary" @click="loginHandleClick">
                       {{ t('sys.login.loginButton') }}</a-button>
                   </div>
-                  <div class="aui-flex">
-                    <a class="aui-linek-code aui-flex-box" @click="codeHandleClick">{{ t('sys.login.qrSignInFormTitle') }}</a>
-                  </div>
-                  <div class="aui-flex">
-                    <a class="aui-linek-code aui-flex-box" @click="registerHandleClick">{{ t('sys.login.registerButton') }}</a>
-                  </div>
+<!--                  <div class="aui-flex">-->
+<!--                    <a class="aui-linek-code aui-flex-box" @click="codeHandleClick">{{ t('sys.login.qrSignInFormTitle') }}</a>-->
+<!--                  </div>-->
+<!--                  <div class="aui-flex">-->
+<!--                    <a class="aui-linek-code aui-flex-box" @click="registerHandleClick">{{ t('sys.login.registerButton') }}</a>-->
+<!--                  </div>-->
                 </div>
               </div>
-              <a-form @keyup.enter.native="loginHandleClick">
-                <div class="aui-flex aui-third-text">
-                  <div class="aui-flex-box aui-third-border">
-                    <span>{{ t('sys.login.otherSignIn') }}</span>
-                  </div>
-                </div>
-                <div class="aui-flex" :class="`${prefixCls}-sign-in-way`">
-                  <div class="aui-flex-box">
-                    <div class="aui-third-login">
-                      <a title="github" @click="onThirdLogin('github')"><GithubFilled /></a>
-                    </div>
-                  </div>
-                  <div class="aui-flex-box">
-                    <div class="aui-third-login">
-                      <a title="企业微信" @click="onThirdLogin('wechat_enterprise')"><icon-font class="item-icon" type="icon-qiyeweixin3" /></a>
-                    </div>
-                  </div>
-                  <div class="aui-flex-box">
-                    <div class="aui-third-login">
-                      <a title="钉钉" @click="onThirdLogin('dingtalk')"><DingtalkCircleFilled /></a>
-                    </div>
-                  </div>
-                  <div class="aui-flex-box">
-                    <div class="aui-third-login">
-                      <a title="微信" @click="onThirdLogin('wechat_open')"><WechatFilled /></a>
-                    </div>
-                  </div>
-                </div>
-              </a-form>
+<!--              <a-form @keyup.enter.native="loginHandleClick">-->
+<!--                <div class="aui-flex aui-third-text">-->
+<!--                  <div class="aui-flex-box aui-third-border">-->
+<!--                    <span>{{ t('sys.login.otherSignIn') }}</span>-->
+<!--                  </div>-->
+<!--                </div>-->
+<!--                <div class="aui-flex" :class="`${prefixCls}-sign-in-way`">-->
+<!--                  <div class="aui-flex-box">-->
+<!--                    <div class="aui-third-login">-->
+<!--                      <a title="github" @click="onThirdLogin('github')"><GithubFilled /></a>-->
+<!--                    </div>-->
+<!--                  </div>-->
+<!--                  <div class="aui-flex-box">-->
+<!--                    <div class="aui-third-login">-->
+<!--                      <a title="企业微信" @click="onThirdLogin('wechat_enterprise')"><icon-font class="item-icon" type="icon-qiyeweixin3" /></a>-->
+<!--                    </div>-->
+<!--                  </div>-->
+<!--                  <div class="aui-flex-box">-->
+<!--                    <div class="aui-third-login">-->
+<!--                      <a title="钉钉" @click="onThirdLogin('dingtalk')"><DingtalkCircleFilled /></a>-->
+<!--                    </div>-->
+<!--                  </div>-->
+<!--                  <div class="aui-flex-box">-->
+<!--                    <div class="aui-third-login">-->
+<!--                      <a title="微信" @click="onThirdLogin('wechat_open')"><WechatFilled /></a>-->
+<!--                    </div>-->
+<!--                  </div>-->
+<!--                </div>-->
+<!--              </a-form>-->
             </div>
           </div>
         </div>
@@ -186,8 +186,10 @@
   import MiniForgotpad from './MiniForgotpad.vue';
   import MiniRegister from './MiniRegister.vue';
   import MiniCodelogin from './MiniCodelogin.vue';
+  // import logoImg from '/@/assets/loginmini/icon/jeecg_logo.png';
+  // import adTextImg from '/@/assets/loginmini/icon/jeecg_ad_text.png'; // 下两行修改
   import logoImg from '/@/assets/loginmini/icon/jeecg_logo.png';
-  import adTextImg from '/@/assets/loginmini/icon/jeecg_ad_text.png';
+  // import adTextImg from '/@/assets/loginmini/icon/zbu_logo.png';
   import { AppLocalePicker, AppDarkModeToggle } from '/@/components/Application';
   import { useLocaleStore } from '/@/store/modules/locale';
   import { createLocalStorage } from '/@/utils/cache';

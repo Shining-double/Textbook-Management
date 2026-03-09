@@ -55,12 +55,18 @@
             <groupId>org.jeecgframework.jimureport</groupId>
             <artifactId>jimubi-spring-boot3-starter</artifactId>
         </dependency>
-		<!-- AI大模型管理 -->
+		<!-- AI 大模型管理 -->
 		<dependency>
 			<groupId>org.jeecgframework.boot3</groupId>
 			<artifactId>jeecg-boot-module-airag</artifactId>
 			<version>${jeecgboot.version}</version>
 		</dependency>
+<!--		&lt;!&ndash; 教材管理模块 &ndash;&gt;-->
+<!--		<dependency>-->
+<!--			<groupId>org.jeecgframework.boot3</groupId>-->
+<!--			<artifactId>jeecg-module-generate</artifactId>-->
+<!--			<version>${jeecgboot.version}</version>-->
+<!--		</dependency>-->
 	</dependencies>
 	
 </project>
