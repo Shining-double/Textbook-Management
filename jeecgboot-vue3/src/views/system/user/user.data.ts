@@ -6,6 +6,10 @@ import { render } from '/@/utils/common/renderUtils';
 import { getDepartPathNameByOrgCode, getDepartName, getMultiDepartPathName, getDepartPathName } from '@/utils/common/compUtils';
 import { h } from 'vue';
 import { Tag } from 'ant-design-vue';
+
+/**
+ * 普通用户列表列配置
+ */
 export const columns: BasicColumn[] = [
   {
     title: '用户账号',
@@ -17,12 +21,12 @@ export const columns: BasicColumn[] = [
     dataIndex: 'realname',
     width: 100,
   },
-/*  {
-    title: '头像',
-    dataIndex: 'avatar',
-    width: 120,
-    customRender: render.renderAvatar,
-  },*/
+  /*  {
+      title: '头像',
+      dataIndex: 'avatar',
+      width: 120,
+      customRender: render.renderAvatar,
+    },*/
 //   {
 //     title: '性别',
 //     dataIndex: 'sex',
@@ -96,6 +100,9 @@ export const columns: BasicColumn[] = [
   },
 ];
 
+/**
+ * 回收站用户列表列配置
+ */
 export const recycleColumns: BasicColumn[] = [
   {
     title: '用户账号',
@@ -124,6 +131,9 @@ export const recycleColumns: BasicColumn[] = [
   // },
 ];
 
+/**
+ * 普通用户搜索表单配置
+ */
 export const searchFormSchema: FormSchema[] = [
   {
     label: '账号',
@@ -135,7 +145,7 @@ export const searchFormSchema: FormSchema[] = [
     label: '名字',
     field: 'realname',
     component: 'JInput',
-   //colProps: { span: 6 },
+    //colProps: { span: 6 },
   },
   // {
   //   label: '性别',
@@ -163,7 +173,7 @@ export const searchFormSchema: FormSchema[] = [
       placeholder: '请选择状态',
       stringToNumber: true,
     },
-   //colProps: { span: 6 },
+    //colProps: { span: 6 },
   },
   // {
   //   label: '所属部门',
@@ -177,6 +187,9 @@ export const searchFormSchema: FormSchema[] = [
   // },
 ];
 
+/**
+ * 普通用户表单配置（新增/编辑）
+ */
 export const formSchema: FormSchema[] = [
   {
     label: '',
@@ -231,15 +244,15 @@ export const formSchema: FormSchema[] = [
   //   component: 'Input',
   //   dynamicRules: ({ model, schema }) => rules.duplicateCheckRule('sys_user', 'work_no', model, schema, false),
   // },
-/*  {
-    label: '职务',
-    field: 'post',
-    required: false,
-    component: 'JSelectPosition',
-    componentProps: {
-      labelKey: 'name',
-    },
-  },*/
+  /*  {
+      label: '职务',
+      field: 'post',
+      required: false,
+      component: 'JSelectPosition',
+      componentProps: {
+        labelKey: 'name',
+      },
+    },*/
   // {
   //   label: '职务',
   //   field: 'positionType',
@@ -487,6 +500,9 @@ export const formSchema: FormSchema[] = [
   // },
 ];
 
+/**
+ * 密码重置表单配置
+ */
 export const formPasswordSchema: FormSchema[] = [
   {
     label: '用户账号',
@@ -520,83 +536,85 @@ export const formPasswordSchema: FormSchema[] = [
   },
 ];
 
+/**
+ * 租户用户列表列配置（关键：已解除注释，可被外部导入）
+ */
+export const userTenantColumns: BasicColumn[] = [
+  {
+    title: '用户账号',
+    dataIndex: 'username',
+    width: 120,
+  },
+  {
+    title: '用户姓名',
+    dataIndex: 'realname',
+    width: 100,
+  },
+  {
+    title: '头像',
+    dataIndex: 'avatar',
+    width: 120,
+    customRender: render.renderAvatar,
+  },
+  {
+    title: '手机号',
+    dataIndex: 'phone',
+    width: 100,
+  },
+  {
+    title: '部门',
+    width: 150,
+    dataIndex: 'orgCodeTxt',
+  },
+  {
+    title: '状态',
+    dataIndex: 'status',
+    width: 80,
+    customRender: ({ text }) => {
+      if (text === '1') {
+        return '正常';
+      } else if (text === '3') {
+        return '审批中';
+      } else {
+        return '已拒绝';
+      }
+    },
+  },
+];
 
-//租户用户列表
-// export const userTenantColumns: BasicColumn[] = [
-//   {
-//     title: '用户账号',
-//     dataIndex: 'username',
-//     width: 120,
-//   },
-//   {
-//     title: '用户姓名',
-//     dataIndex: 'realname',
-//     width: 100,
-//   },
-//   {
-//     title: '头像',
-//     dataIndex: 'avatar',
-//     width: 120,
-//     customRender: render.renderAvatar,
-//   },
-//   {
-//     title: '手机号',
-//     dataIndex: 'phone',
-//     width: 100,
-//   },
-//   {
-//     title: '部门',
-//     width: 150,
-//     dataIndex: 'orgCodeTxt',
-//   },
-//   {
-//     title: '状态',
-//     dataIndex: 'status',
-//     width: 80,
-//     customRender: ({ text }) => {
-//       if (text === '1') {
-//         return '正常';
-//       } else if (text === '3') {
-//         return '审批中';
-//       } else {
-//         return '已拒绝';
-//       }
-//     },
-//   },
-// ];
-//
-// //用户租户搜索表单
-// export const userTenantFormSchema: FormSchema[] = [
-//   {
-//     label: '账号',
-//     field: 'username',
-//     component: 'Input',
-//     colProps: { span: 6 },
-//   },
-//   {
-//     label: '名字',
-//     field: 'realname',
-//     component: 'Input',
-//     colProps: { span: 6 },
-//   },
-//   {
-//     label: '性别',
-//     field: 'sex',
-//     component: 'JDictSelectTag',
-//     componentProps: {
-//       dictCode: 'sex',
-//       placeholder: '请选择性别',
-//       stringToNumber: true,
-//     },
-//     colProps: { span: 6 },
-//   },
-// ];
-
+/**
+ * 用户租户搜索表单配置（关键：已解除注释，可被外部导入）
+ */
+export const userTenantFormSchema: FormSchema[] = [
+  {
+    label: '账号',
+    field: 'username',
+    component: 'Input',
+    colProps: { span: 6 },
+  },
+  {
+    label: '名字',
+    field: 'realname',
+    component: 'Input',
+    colProps: { span: 6 },
+  },
+  {
+    label: '性别',
+    field: 'sex',
+    component: 'JDictSelectTag',
+    componentProps: {
+      dictCode: 'sex',
+      placeholder: '请选择性别',
+      stringToNumber: true,
+    },
+    colProps: { span: 6 },
+  },
+];
 
 /**
  * 删除非当前部门下的数据
  * 当所属部门发生改变时，取消主岗位和兼职岗位的选中值
- * 
+ *
  * @param formModel 表单模型
  * @param values 选中的部门值
  * @param formActionType 表单操作方法
@@ -615,13 +633,13 @@ async function removeDepPostByDepId(formModel, values, formActionType) {
         // 查询当前选中部门下的岗位ID
         const { result } = await getDepPostIdByDepId({ depIds: departIds });
         const validPostIds = result.split(",") || [];
-        
+
         // 检查主岗位是否在当前部门下
         if (formModel.mainDepPostId) {
-          const mainPostId = Array.isArray(formModel.mainDepPostId) 
-            ? formModel.mainDepPostId[0] 
+          const mainPostId = Array.isArray(formModel.mainDepPostId)
+            ? formModel.mainDepPostId[0]
             : formModel.mainDepPostId;
-          
+
           if (mainPostId && !validPostIds.includes(mainPostId)) {
             // 主岗位不在当前部门下，清空主岗位
             setFieldsValue({ mainDepPostId: null });
@@ -634,7 +652,7 @@ async function removeDepPostByDepId(formModel, values, formActionType) {
           formModel.otherDepPostId = formModel.otherDepPostId.split(",");
         }
         if (formModel.otherDepPostId && Array.isArray(formModel.otherDepPostId)) {
-          const validOtherPosts = formModel.otherDepPostId.filter(postId => 
+          const validOtherPosts = formModel.otherDepPostId.filter(postId =>
             validPostIds.includes(postId)
           );
           // 有兼职岗位不在当前部门下，更新兼职岗位
@@ -666,8 +684,8 @@ async function removeDepPostByDepId(formModel, values, formActionType) {
 /**
  * 更新负责部门的options
  *
- * @param options
- * @param updateSchema
+ * @param options 部门选项列表
+ * @param updateSchema 表单schema更新方法
  */
 async function updateDepartOption(options, updateSchema) {
   if (options && options.length > 0) {
