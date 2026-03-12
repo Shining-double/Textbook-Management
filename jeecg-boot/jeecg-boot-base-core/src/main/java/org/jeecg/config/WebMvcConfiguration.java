@@ -41,6 +41,10 @@ import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
+
+import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
+import org.jeecg.config.interceptor.SwaggerAuthInterceptor;
+
 /**
  * Spring Boot 2.0 解决跨域问题
  *
@@ -175,5 +179,12 @@ public class WebMvcConfiguration implements WebMvcConfigurer {
 //    public void addInterceptors(InterceptorRegistry registry) {
 //        registry.addInterceptor(new DynamicDatasourceInterceptor()).addPathPatterns("/test/dynamic/**");
 //    }
+
+    @Override
+    public void addInterceptors(InterceptorRegistry registry) {
+        // 注册 Swagger 文档访问权限拦截器
+        registry.addInterceptor(new SwaggerAuthInterceptor())
+                .addPathPatterns("/doc.html", "/swagger-ui/**", "/v3/api-docs/**");
+    }
 
 }
