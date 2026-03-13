@@ -39,7 +39,7 @@
 
       <SettingDrawer v-if="getShowSetting" :class="`${prefixCls}-action__item`" />
       <!-- ai助手 -->
-      <Aide v-if="getAiIconShow"></Aide>
+<!--      <Aide v-if="getAiIconShow"></Aide>-->
     </div>
   </Header>
   <LoginSelect ref="loginSelectRef" @success="loginSelectOk"></LoginSelect>
