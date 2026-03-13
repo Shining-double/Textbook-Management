@@ -121,6 +121,12 @@ public class TReceiveController extends JeecgController<TReceive, ITReceiveServi
 		customeRuleMap.put("receiveStatus", QueryRuleEnum.LIKE_WITH_OR);
 		QueryWrapper<TReceive> queryWrapper = QueryGenerator.initQueryWrapper(tReceive, req.getParameterMap(), customeRuleMap);
 
+		// 学院模糊查询
+		String collegeName = req.getParameter("collegeName");
+		if (oConvertUtils.isNotEmpty(collegeName)) {
+			queryWrapper.inSql("receive_operator", "SELECT id FROM t_student WHERE major_id IN (SELECT id FROM t_major WHERE college_id IN (SELECT id FROM t_college WHERE college_name LIKE CONCAT('%', '" + collegeName + "', '%')))");
+		}
+
 		// 4. 按角色过滤查询条件
 		switch (userRoleType) {
 			case ADMIN_ROLE_CODE:

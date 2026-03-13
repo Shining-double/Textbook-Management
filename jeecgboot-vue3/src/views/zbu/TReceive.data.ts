@@ -66,6 +66,12 @@ export const searchFormSchema: FormSchema[] = [
     component: 'Input',
     colProps: { span: 8 },
   },
+  {
+    label: "学院",
+    field: 'collegeName',
+    component: 'Input',
+    //colProps: {span: 6},
+  },
   // 教材（模糊搜索）
   {
     label: '教材',

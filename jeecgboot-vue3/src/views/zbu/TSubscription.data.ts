@@ -79,6 +79,12 @@ export const columns: BasicColumn[] = [
 ];
 //查询数据
 export const searchFormSchema: FormSchema[] = [
+  {
+    label: "新生届号",
+    field: 'studentIdPrefix',
+    component: 'Input',
+    //colProps: {span: 6},
+  },
 	{
       label: "学生",
       field: 'studentId',
@@ -91,6 +97,12 @@ export const searchFormSchema: FormSchema[] = [
       component: 'Input',
       //colProps: {span: 6},
  	},
+  {
+    label: "学院",
+    field: 'collegeName',
+    component: 'Input',
+    //colProps: {span: 6},
+  },
 	{
       label: "征订学年",
       field: 'subscriptionYear',

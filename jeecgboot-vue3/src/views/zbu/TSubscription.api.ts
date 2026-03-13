@@ -16,6 +16,7 @@ enum Api {
   getStudentByNo = '/zbu/tStudent/queryByStudentId', // 按学号查询学生
   getTextbookById = '/zbu/tTextbook/queryById', // 查教材
   getMajorById = '/zbu/tMajor/queryById',       // 查专业
+  getCollegeById = '/zbu/tCollege/queryById',   // 查学院
   batchUpdateSubscribeStatus = '/zbu/tSubscription/batchUpdateSubscribeStatus',
 }
 /**
@@ -103,3 +104,9 @@ export const getStudentByNo = (studentNo: string) =>
     url: Api.getStudentByNo,
     params: { studentId: studentNo } // 传学号给后端（参数名和后端保持一致）
   });
+
+// 根据学院ID查学院信息
+export const getCollegeById = (collegeId) =>
+  defHttp.get({ url: Api.getCollegeById, params: { id: collegeId } });
+
+

@@ -226,7 +226,7 @@
   //账号登录表单字段
   const formData = reactive<any>({
     inputCode: '',
-    username: 'admin',
+    username: '',
     password: '123456',
     loginOrgCode: '',
   });
@@ -264,7 +264,8 @@
   const departList = ref([]);
   //部门显示
   const showDepart = computed(()=>{
-    return departList.value.length > 1
+    // return departList.value.length > 1
+    return false;
   })
   //获取部门缩写
   const getShortDeptName = computed(()=>{

@@ -804,7 +804,7 @@ public class TTextbookSelectionController extends JeecgController<TTextbookSelec
 					subscription.setMajorId(selection.getMajorId()); // 专业ID
 					subscription.setSubscriptionYear(selection.getSchoolYear()); // 征订学年
 					subscription.setSubscriptionSemester(selection.getSemester()); // 征订学期
-					subscription.setSubscribeStatus("未设置"); // 征订状态：未设置（匹配你的字典值）
+					subscription.setSubscribeStatus("待确认"); // 征订状态：待确认（学生同意后才会创建领取记录）
 					subscription.setRemark(""); // 备注
 					subscription.setCreateTime(new Date()); // 创建时间
 					subscription.setUpdateTime(new Date()); // 更新时间
@@ -812,107 +812,11 @@ public class TTextbookSelectionController extends JeecgController<TTextbookSelec
 				}).filter(subscription -> subscription != null) // 过滤掉重复的记录
 				.collect(Collectors.toList());
 
-		// 4. 批量保存征订记录 + 生成领取/账单记录
+		// 4. 批量保存征订记录 + 生成账单记录（领取记录在学生同意征订后创建）
 		if (!subscriptionList.isEmpty()) {
 			tSubscriptionService.saveBatch(subscriptionList);
 			log.info("为班级{}生成{}条征订记录", selection.getClassId(), subscriptionList.size());
-
-			// ========== 新增：批量生成领取记录（适配TReceive实体） ==========
-			List<TReceive> receiveList = subscriptionList.stream().map(subscription -> {
-				// 防重复：学生ID+征订ID 唯一
-				QueryWrapper<TReceive> receiveExistWrapper = new QueryWrapper<>();
-				receiveExistWrapper.eq("receive_operator", subscription.getStudentId()) // 领取操作人=学生ID（初始值）
-						.eq("subscription_id", subscription.getId()); // 关联征订记录ID
-				if (tReceiveService.count(receiveExistWrapper) > 0) {
-					log.warn("学生{}已存在该征订记录的领取记录，跳过", subscription.getStudentId());
-					return null;
-				}
-
-				// 构建领取记录（完全匹配TReceive实体字段）
-				TReceive receive = new TReceive();
-				receive.setReceiveOperator(subscription.getStudentId()); // 领取操作人（关联学生ID）
-				receive.setSubscriptionId(subscription.getId()); // 关联征订记录ID
-				receive.setReceiveStatus("未领取"); // 初始状态：未领取（匹配你的receive_status字典）
-				receive.setReceiveTime(null); // 领取时间初始为空
-				receive.setReceiveRemark(""); // 领取备注
-				receive.setCreateTime(new Date());
-				receive.setUpdateTime(new Date());
-				return receive;
-			}).filter(Objects::nonNull).collect(Collectors.toList());
-
-			// 保存领取记录
-			if (!receiveList.isEmpty()) {
-				tReceiveService.saveBatch(receiveList);
-				log.info("为班级{}生成{}条领取记录", selection.getClassId(), receiveList.size());
-			}
-
-			// ========== 新增：批量生成个人账单记录（核心修改：存储业务学号） ==========
-			List<StudentBill> billList = subscriptionList.stream().map(subscription -> {
-				// ========== 核心修改1：通过征订表的学生主键ID查询学生，获取业务学号 ==========
-				TStudent tStudent = tStudentService.getById(subscription.getStudentId());
-				if (tStudent == null) {
-					log.warn("学生主键ID{}不存在，跳过账单生成", subscription.getStudentId());
-					return null;
-				}
-				String studentNo = tStudent.getStudentId(); // 学生表的student_id = 业务学号（如250054070155）
-				if (oConvertUtils.isEmpty(studentNo)) {
-					log.warn("学生主键ID{}无业务学号，跳过账单生成", subscription.getStudentId());
-					return null;
-				}
-
-				// ========== 核心修改2：防重复查询改为用业务学号 ==========
-				QueryWrapper<StudentBill> billExistWrapper = new QueryWrapper<>();
-				billExistWrapper.eq("student_id", studentNo) // 用业务学号防重复
-						.eq("subscription_year", subscription.getSubscriptionYear())
-						.eq("subscription_semester", subscription.getSubscriptionSemester())
-						.eq("textbook_name", tTextbookService.getById(subscription.getTextbookId()).getTextbookName()); // 用教材名称匹配
-				if (tStudentBillService.count(billExistWrapper) > 0) {
-					log.warn("学生业务学号{}已存在该教材的账单记录，跳过", studentNo);
-					return null;
-				}
-
-				// 补充查询：专业名称、教材名称、教材定价/折扣（原有逻辑，不变）
-				TMajor major = tMajorService.getById(subscription.getMajorId()); // 查专业名称
-				TTextbook textbook = tTextbookService.getById(subscription.getTextbookId()); // 查教材信息
-				if (textbook == null) {
-					log.warn("教材ID{}不存在，跳过账单生成", subscription.getTextbookId());
-					return null;
-				}
-
-				// 计算折扣后费用（原有逻辑，不变）
-				BigDecimal price = textbook.getPrice() != null ? textbook.getPrice() : BigDecimal.ZERO;
-				BigDecimal discount = textbook.getDiscount() != null ? textbook.getDiscount() : new BigDecimal("1");
-				BigDecimal discountPrice = price.multiply(discount).setScale(2, BigDecimal.ROUND_HALF_UP);
-
-				// ========== 核心修改3：账单表存储业务学号 ==========
-				StudentBill bill = new StudentBill();
-				bill.setStudentId(studentNo); // 关键：存业务学号（如250054070155）
-				bill.setMajorName(major != null ? major.getMajorName() : ""); // 专业名称
-				bill.setSubscriptionYear(subscription.getSubscriptionYear()); // 征订学年
-				bill.setSubscriptionSemester(subscription.getSubscriptionSemester()); // 征订学期
-				bill.setTextbookName(textbook.getTextbookName()); // 教材名称
-				bill.setPrice(price); // 教材定价
-				bill.setDiscountPrice(discountPrice); // 折扣后费用
-				bill.setSubscribeStatus(subscription.getSubscribeStatus()); // 征订状态
-				bill.setReceiveStatus("未领取"); // 领取状态（初始值）
-				bill.setRemark(""); // 备注
-				bill.setCreateTime(new Date());
-				bill.setUpdateTime(new Date());
-				return bill;
-			}).filter(Objects::nonNull).collect(Collectors.toList());
-
-			// 保存个人账单记录
-			if (!billList.isEmpty()) {
-				tStudentBillService.saveBatch(billList);
-				log.info("为班级{}生成{}条个人账单记录（存储业务学号）", selection.getClassId(), billList.size());
-
-				if (!billList.isEmpty()) {
-					// 取第一条账单的分组维度，触发增量汇总
-					StudentBill firstBill = billList.get(0);
-					studentAllBillSummaryController.incrementSummary(firstBill, false);
-					log.info("生成{}条个人账单后，触发【增量汇总】总账单", billList.size());
-				}
-			}
+			log.info("领取记录和个人账单将在学生同意征订后创建");
 		}
 	}
 }

@@ -93,7 +93,7 @@ import TSubscriptionModal from './components/TSubscriptionModal.vue'
 import {columns, searchFormSchema, superQuerySchema} from './TSubscription.data';
 import {
   deleteOne, batchDelete, getImportUrl, getExportUrl, getMySubscription,
-  getStudentById, getTextbookById, getMajorById, batchUpdateSubscribeStatus,
+  getStudentById, getTextbookById, getMajorById, getCollegeById, batchUpdateSubscribeStatus,
   getStudentByNo
 } from './TSubscription.api';
 import { downloadFile } from '/jeecgboot-vue3/src/utils/common/renderUtils';
@@ -198,6 +198,7 @@ const fetchTableData = async (params = {}) => {
       let studentName = '未知姓名';
       let textbookName = '未知教材';
       let majorName = '未知专业';
+      let collegeName = '未知学院';
 
       // 查询学生信息（异常静默处理）
       if (item.studentId) {
@@ -223,6 +224,15 @@ const fetchTableData = async (params = {}) => {
         try {
           const majorInfo = await getMajorById(item.majorId);
           majorName = majorInfo?.majorName || majorInfo?.name || '未知专业';
+          // 查询学院信息
+          if (majorInfo?.collegeId) {
+            try {
+              const collegeInfo = await getCollegeById(majorInfo.collegeId);
+              collegeName = collegeInfo?.collegeName || collegeInfo?.name || '未知学院';
+            } catch (e) {
+              console.debug("查询学院信息失败：", e.message);
+            }
+          }
         } catch (e) {
           console.debug("查询专业信息失败：", e.message);
         }
@@ -234,6 +244,7 @@ const fetchTableData = async (params = {}) => {
         studentName,
         textbookName,
         majorName,
+        collegeName,
         subscriptionSemester: item.subscriptionSemester || '',
         subscriptionSemester_dictText: item.subscriptionSemester === '1' ? '第一学期' : '第二学期',
         subscribeStatus: item.subscribeStatus || '0',
@@ -278,6 +289,24 @@ const fetchTableData = async (params = {}) => {
         filteredRecords = filteredRecords.filter(item =>
           statusList.includes(item.subscribeStatus)
         );
+      }
+      if (params.collegeName) {
+        const searchKey = params.collegeName.trim().toLowerCase();
+        // 这里需要根据实际情况获取学院名称，暂时通过专业名称模糊匹配
+        // 后续可以优化为通过专业ID查询学院信息
+        filteredRecords = filteredRecords.filter(item => {
+          // 使用学院名称进行模糊匹配
+          return item.collegeName.toLowerCase().includes(searchKey);
+        });
+      }
+      if (params.studentIdPrefix) {
+        const prefix = params.studentIdPrefix.trim();
+        if (prefix.length === 2) {
+          filteredRecords = filteredRecords.filter(item => {
+            // 检查学号前两位是否等于输入值
+            return item.studentNo && item.studentNo.startsWith(prefix);
+          });
+        }
       }
     }
 

@@ -87,7 +87,7 @@ import TReceiveModal from './components/TReceiveModal.vue'
 import {columns, searchFormSchema, superQuerySchema} from './TReceive.data';
 import {
   deleteOne, batchDelete, getImportUrl, getExportUrl, getMyReceive,
-  getStudentById, getSubscriptionById, getTextbookById, getStudentByNo,
+  getStudentById, getSubscriptionById, getTextbookById, getMajorById, getCollegeById, getStudentByNo,
   batchUpdateReceiveStatus
 } from './TReceive.api';
 import { useUserStore } from '/@/store/modules/user';
@@ -182,12 +182,32 @@ const fetchTableData = async (params = {}) => {
       let studentNo = '未知学号';
       let studentName = '未知姓名';
       let textbookName = '未知教材';
+      let collegeName = '未知学院';
 
       if (item.receiveOperator) {
         try {
           const studentInfo = await getStudentById(item.receiveOperator);
           studentNo = studentInfo?.studentId || studentInfo?.result?.studentId || '未知学号';
           studentName = studentInfo?.studentName || studentInfo?.result?.studentName || '未知姓名';
+          // 查询专业信息
+          const majorId = studentInfo?.majorId || studentInfo?.result?.majorId;
+          if (majorId) {
+            try {
+              const majorInfo = await getMajorById(majorId);
+              // 查询学院信息
+              const collegeId = majorInfo?.collegeId || majorInfo?.result?.collegeId;
+              if (collegeId) {
+                try {
+                  const collegeInfo = await getCollegeById(collegeId);
+                  collegeName = collegeInfo?.collegeName || collegeInfo?.result?.collegeName || '未知学院';
+                } catch (e) {
+                  console.debug("查询学院信息失败：", e.message);
+                }
+              }
+            } catch (e) {
+              console.debug("查询专业信息失败：", e.message);
+            }
+          }
         } catch (e) {
           console.debug("查询学生信息失败：", e.message);
         }
@@ -210,6 +230,7 @@ const fetchTableData = async (params = {}) => {
         studentNo,
         studentName,
         textbookName,
+        collegeName,
         receiveStatus: item.receiveStatus || '0',
         receiveStatus_dictText: item.receiveStatus === '1' ? '已领取' : '未领取',
         key: item.id || Math.random().toString(36).substr(2, 9)
@@ -217,27 +238,97 @@ const fetchTableData = async (params = {}) => {
     }
 
     let filteredRecords = [...formattedRecords];
+    // console.log('【领取表筛选】参数：', params);
     if ((unref(isAdmin) || unref(isCounselor)) && Object.keys(params).length > 0) {
-      if (params.receiveOperator) {
-        const searchKey = params.receiveOperator.trim().toLowerCase();
+      if (params.studentNo) {
+        const searchKey = params.studentNo.trim().toLowerCase();
         filteredRecords = filteredRecords.filter(item =>
-          item.studentNo.toLowerCase().includes(searchKey) ||
+          item.studentNo.toLowerCase().includes(searchKey)
+        );
+      }
+      if (params.studentName) {
+        const searchKey = params.studentName.trim().toLowerCase();
+        filteredRecords = filteredRecords.filter(item =>
           item.studentName.toLowerCase().includes(searchKey)
         );
       }
-      if (params.subscriptionId) {
-        const searchKey = params.subscriptionId.trim().toLowerCase();
+      if (params.textbookName) {
+        const searchKey = params.textbookName.trim().toLowerCase();
         filteredRecords = filteredRecords.filter(item =>
           item.textbookName.toLowerCase().includes(searchKey)
         );
       }
       if (params.receiveStatus) {
-        const statusList = Array.isArray(params.receiveStatus)
-          ? params.receiveStatus
-          : [params.receiveStatus];
-        filteredRecords = filteredRecords.filter(item =>
-          statusList.includes(item.receiveStatus)
-        );
+        console.log('【领取表筛选】receiveStatus参数：', params.receiveStatus, typeof params.receiveStatus);
+
+        // 处理不同类型的 receiveStatus 参数
+        let statusList = [];
+        if (Array.isArray(params.receiveStatus)) {
+          statusList = params.receiveStatus;
+        } else if (typeof params.receiveStatus === 'object' && params.receiveStatus !== null) {
+          // 如果是对象，尝试获取其值
+          if (params.receiveStatus.value !== undefined) {
+            statusList = [params.receiveStatus.value];
+          } else if (params.receiveStatus.label !== undefined) {
+            statusList = [params.receiveStatus.label];
+          } else {
+            statusList = [params.receiveStatus];
+          }
+        } else {
+          statusList = [params.receiveStatus];
+        }
+
+        // console.log('【领取表筛选】statusList：', statusList);
+
+        // 调试：查看过滤前的记录
+        // console.log('【领取表筛选】过滤前记录数：', filteredRecords.length);
+        // console.log('【领取表筛选】过滤前记录状态：', filteredRecords.map(item => ({id: item.id, receiveStatus: item.receiveStatus, receiveStatus_dictText: item.receiveStatus_dictText})));
+
+        filteredRecords = filteredRecords.filter(item => {
+          // 处理不同的状态值格式
+          const itemStatus = item.receiveStatus || '0';
+          // console.log('【领取表筛选】当前记录状态：', item.id, itemStatus, item.receiveStatus_dictText);
+
+          const match = statusList.some(status => {
+            // 处理状态值
+            let statusValue = status;
+            if (typeof status === 'object' && status !== null) {
+              if (status.value !== undefined) {
+                statusValue = status.value;
+              } else if (status.label !== undefined) {
+                statusValue = status.label;
+              }
+            }
+
+            // console.log('【领取表筛选】比较状态：', statusValue, typeof statusValue, 'vs', itemStatus);
+
+            // 处理后端返回的文本状态值
+            if (itemStatus === '未领取' || itemStatus === '未领') {
+              // 如果记录状态是未领取，检查参数是否匹配
+              return statusValue === '0' || statusValue === '未领' || statusValue === '未领取';
+            } else if (itemStatus === '已领取' || itemStatus === '已领') {
+              // 如果记录状态是已领取，检查参数是否匹配
+              return statusValue === '1' || statusValue === '已领' || statusValue === '已领取';
+            } else {
+              // 其他情况，直接比较
+              return statusValue === itemStatus;
+            }
+          });
+
+          // console.log('【领取表筛选】记录匹配结果：', item.id, match);
+          return match;
+        });
+
+        // 调试：查看过滤后的记录
+        // console.log('【领取表筛选】过滤后记录数：', filteredRecords.length);
+        // console.log('【领取表筛选】过滤后记录状态：', filteredRecords.map(item => ({id: item.id, receiveStatus: item.receiveStatus, receiveStatus_dictText: item.receiveStatus_dictText})));
+      }
+      if (params.collegeName) {
+        const searchKey = params.collegeName.trim().toLowerCase();
+        filteredRecords = filteredRecords.filter(item => {
+          // 使用学院名称进行模糊匹配
+          return item.collegeName.toLowerCase().includes(searchKey);
+        });
       }
     }
 

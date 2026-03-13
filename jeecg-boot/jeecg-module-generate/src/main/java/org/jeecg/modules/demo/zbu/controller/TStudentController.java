@@ -117,6 +117,13 @@ public class TStudentController extends JeecgController<TStudent, ITStudentServi
         // 自定义多选的查询规则为：LIKE_WITH_OR
         customeRuleMap.put("status", QueryRuleEnum.LIKE_WITH_OR);
         QueryWrapper<TStudent> queryWrapper = QueryGenerator.initQueryWrapper(tStudent, req.getParameterMap(),customeRuleMap);
+
+		// 学院模糊查询
+		String collegeName = req.getParameter("collegeName");
+		if (oConvertUtils.isNotEmpty(collegeName)) {
+			queryWrapper.inSql("major_id", "SELECT id FROM t_major WHERE college_id IN (SELECT id FROM t_college WHERE college_name LIKE CONCAT('%', '" + collegeName + "', '%'))");
+		}
+
 		Page<TStudent> page = new Page<TStudent>(pageNo, pageSize);
 
 		IPage<TStudent> pageList = tStudentService.page(page, queryWrapper);

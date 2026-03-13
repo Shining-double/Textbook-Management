@@ -1,5 +1,6 @@
 package org.jeecg.modules.demo.zbu.controller;
 
+import java.math.BigDecimal;
 import java.util.*;
 import java.util.stream.Collectors;
 import java.io.IOException;
@@ -66,8 +67,14 @@ public class TSubscriptionController extends JeecgController<TSubscription, ITSu
 	 private ITClassService tClassService;
 	 @Autowired
 	 private ITCounselorService tCounselorService;
-	
-	/**
+	 @Autowired
+	 private ITMajorService tMajorService;
+	 @Autowired
+	 private StudentAllBillSummaryController studentAllBillSummaryController;
+
+
+
+	 /**
 	 * 分页列表查询
 	 *
 	 * @param tSubscription
@@ -91,6 +98,16 @@ public class TSubscriptionController extends JeecgController<TSubscription, ITSu
         customeRuleMap.put("subscriptionSemester", QueryRuleEnum.LIKE_WITH_OR);
         customeRuleMap.put("subscribeStatus", QueryRuleEnum.LIKE_WITH_OR);
         QueryWrapper<TSubscription> queryWrapper = QueryGenerator.initQueryWrapper(tSubscription, req.getParameterMap(),customeRuleMap);
+
+		// 学院模糊查询
+		String collegeName = req.getParameter("collegeName");
+		if (oConvertUtils.isNotEmpty(collegeName)) {
+			// 仿照学生表的查询逻辑：通过 major_id 关联专业表，然后关联学院表
+			queryWrapper.inSql("major_id",
+					"SELECT id FROM t_major WHERE college_id IN (SELECT id FROM t_college WHERE college_name LIKE CONCAT('%', '"
+							+ collegeName + "', '%'))");
+		}
+
 		Page<TSubscription> page = new Page<TSubscription>(pageNo, pageSize);
 		IPage<TSubscription> pageList = tSubscriptionService.page(page, queryWrapper);
 		return Result.OK(pageList);
@@ -432,6 +449,7 @@ public class TSubscriptionController extends JeecgController<TSubscription, ITSu
 
 			 // 6.3 遍历每条征订记录，精准更新对应账单（核心：逐条匹配，避免批量错误）
 			 int billUpdateCount = 0;
+			 int billCreateCount = 0;
 			 for (TSubscription subscription : subList) {
 				 // 6.3.1 获取学生业务学号（关键：账单表存储的是学号，不是学生表主键）
 				 String studentTableId = subscription.getStudentId(); // 征订表的studentId是学生表主键
@@ -443,35 +461,72 @@ public class TSubscriptionController extends JeecgController<TSubscription, ITSu
 				 String studentNo = student.getStudentId(); // 学生业务学号（账单表的student_id）
 
 				 // 6.3.2 获取教材名称（精准匹配账单的关键维度）
+				 TTextbook textbook = null;
 				 String textbookName = "未知教材";
 				 if (subscription.getTextbookId() != null) {
-					 TTextbook textbook = tTextbookService.getById(subscription.getTextbookId());
+					 textbook = tTextbookService.getById(subscription.getTextbookId());
 					 if (textbook != null) {
 						 textbookName = textbook.getTextbookName();
 					 }
 				 }
 
-				 // 6.3.3 精准构造账单更新条件（学号+学年+学期+教材名称，4维度匹配）
+				 // 6.3.3 精准构造账单查询条件（学号+学年+学期+教材名称，4维度匹配）
 				 QueryWrapper<StudentBill> billWrapper = new QueryWrapper<>();
 				 billWrapper.eq("student_id", studentNo) // 匹配账单的业务学号
 						 .eq("subscription_year", subscription.getSubscriptionYear())
 						 .eq("subscription_semester", subscription.getSubscriptionSemester())
 						 .eq("textbook_name", textbookName); // 新增教材名称维度
 
-				 // 6.3.4 构造账单更新对象
-				 StudentBill billUpdate = new StudentBill();
-				 billUpdate.setSubscribeStatus(billSubscribeStatus); // 同步映射后的征订状态
-				 billUpdate.setUpdateTime(new Date()); // 更新账单修改时间
+				 // 6.3.4 检查是否已存在账单记录
+				 StudentBill existingBill = studentBillService.getOne(billWrapper);
+				 if (existingBill != null) {
+					 // 更新账单记录
+					 StudentBill billUpdate = new StudentBill();
+					 billUpdate.setId(existingBill.getId());
+					 billUpdate.setSubscribeStatus(billSubscribeStatus); // 同步映射后的征订状态
+					 billUpdate.setReceiveStatus("未领取"); // 领取状态
+					 billUpdate.setUpdateTime(new Date()); // 更新账单修改时间
 
-				 // 6.3.5 执行单条账单更新，并统计成功数
-				 boolean singleBillSuccess = studentBillService.update(billUpdate, billWrapper);
-				 if (singleBillSuccess) {
-					 billUpdateCount++;
-					 log.info("【同步账单成功】征订记录ID={} → 账单（学号={}，教材={}）征订状态改为{}",
-							 subscription.getId(), studentNo, textbookName, billSubscribeStatus);
-				 } else {
-					 log.warn("【同步账单失败】征订记录ID={} → 账单（学号={}，教材={}）无匹配记录或状态未变更",
-							 subscription.getId(), studentNo, textbookName);
+					 boolean singleBillSuccess = studentBillService.updateById(billUpdate);
+					 if (singleBillSuccess) {
+						 billUpdateCount++;
+						 log.info("【同步账单成功】征订记录ID={} → 账单（学号={}，教材={}）征订状态改为{}",
+								 subscription.getId(), studentNo, textbookName, billSubscribeStatus);
+					 } else {
+						 log.warn("【同步账单失败】征订记录ID={} → 账单（学号={}，教材={}）更新失败",
+								 subscription.getId(), studentNo, textbookName);
+					 }
+				 } else if (textbook != null) {
+					 // 创建新账单记录
+					 TMajor major = tMajorService.getById(subscription.getMajorId()); // 查专业名称
+					 // 计算折扣后费用
+					 BigDecimal price = textbook.getPrice() != null ? textbook.getPrice() : BigDecimal.ZERO;
+					 BigDecimal discount = textbook.getDiscount() != null ? textbook.getDiscount() : new BigDecimal("1");
+					 BigDecimal discountPrice = price.multiply(discount).setScale(2, BigDecimal.ROUND_HALF_UP);
+
+					 StudentBill newBill = new StudentBill();
+					 newBill.setStudentId(studentNo); // 存业务学号
+					 newBill.setMajorName(major != null ? major.getMajorName() : ""); // 专业名称
+					 newBill.setSubscriptionYear(subscription.getSubscriptionYear()); // 征订学年
+					 newBill.setSubscriptionSemester(subscription.getSubscriptionSemester()); // 征订学期
+					 newBill.setTextbookName(textbookName); // 教材名称
+					 newBill.setPrice(price); // 教材定价
+					 newBill.setDiscountPrice(discountPrice); // 折扣后费用
+					 newBill.setSubscribeStatus(billSubscribeStatus); // 征订状态
+					 newBill.setReceiveStatus("未领取"); // 领取状态
+					 newBill.setRemark(""); // 备注
+					 newBill.setCreateTime(new Date());
+					 newBill.setUpdateTime(new Date());
+
+					 boolean singleBillSuccess = studentBillService.save(newBill);
+					 if (singleBillSuccess) {
+						 billCreateCount++;
+						 log.info("【创建账单成功】征订记录ID={} → 账单（学号={}，教材={}）创建成功",
+								 subscription.getId(), studentNo, textbookName);
+					 } else {
+						 log.warn("【创建账单失败】征订记录ID={} → 账单（学号={}，教材={}）创建失败",
+								 subscription.getId(), studentNo, textbookName);
+					 }
 				 }
 			 }
 
@@ -479,9 +534,47 @@ public class TSubscriptionController extends JeecgController<TSubscription, ITSu
 			 log.info("同步更新个人账单结果：{}，共尝试更新{}条，成功{}条，征订状态改为{}",
 					 billUpdateCount > 0 ? "成功" : "失败", subList.size(), billUpdateCount, billSubscribeStatus);
 
-			 // 7. 返回最终结果
-			 String msg = String.format("成功修改%d条征订记录状态（同步更新%d条账单记录）！", ids.size(), billUpdateCount);
+			 // 7. 当同意征订时，为每条征订记录创建领取记录
+			 int receiveCreateCount = 0;
+			 if ("1".equals(subscribeStatus)) { // 1表示已征订/同意征订
+				 List<TReceive> receiveList = new ArrayList<>();
+				 for (TSubscription subscription : subList) {
+					 // 检查是否已存在领取记录
+					 QueryWrapper<TReceive> receiveWrapper = new QueryWrapper<>();
+					 receiveWrapper.eq("subscription_id", subscription.getId());
+					 if (tReceiveService.count(receiveWrapper) == 0) {
+						 // 创建领取记录
+						 TReceive receive = new TReceive();
+						 receive.setReceiveOperator(subscription.getStudentId());
+						 receive.setSubscriptionId(subscription.getId());
+						 receive.setReceiveStatus("未领取");
+						 receive.setReceiveRemark("");
+						 receive.setCreateTime(new Date());
+						 receive.setUpdateTime(new Date());
+						 receiveList.add(receive);
+						 receiveCreateCount++;
+					 }
+				 }
+				 if (!receiveList.isEmpty()) {
+					 tReceiveService.saveBatch(receiveList);
+					 log.info("批量创建领取记录成功，共创建{}条", receiveList.size());
+				 }
+			 }
+
+			 // 9. 更新总账单
+			 try {
+				 studentAllBillSummaryController.autoSummarySubscriptionData();
+				 log.info("批量同意征订后，触发总账单重新汇总");
+			 } catch (Exception e) {
+				 log.error("总账单更新失败", e);
+				 // 总账单更新失败不影响主流程
+			 }
+
+			 // 10. 返回最终结果
+			 String msg = String.format("成功修改%d条征订记录状态（同步更新%d条账单记录，创建%d条账单记录，创建%d条领取记录）！", ids.size(), billUpdateCount,
+					 billCreateCount, receiveCreateCount);
 			 return Result.OK(msg);
+
 
 		 } catch (Exception e) {
 			 log.error("批量修改征订状态失败", e);
@@ -495,7 +588,138 @@ public class TSubscriptionController extends JeecgController<TSubscription, ITSu
 	 }
 
 
+	 /**
+	  * 学生同意征订
+	  * 学生点击同意征订后，更新征订状态为"已确认"并创建领取记录
+	  *
+	  * @param subscriptionId 征订记录ID
+	  * @return
+	  */
+	 @AutoLog(value = "征订表-学生同意征订")
+	 @Operation(summary = "征订表-学生同意征订")
+	 @PostMapping(value = "/agreeSubscription")
+	 public Result<String> agreeSubscription(@RequestParam String subscriptionId) {
+		 try {
+			 // 1. 查询征订记录
+			 TSubscription subscription = tSubscriptionService.getById(subscriptionId);
+			 if (subscription == null) {
+				 return Result.error("征订记录不存在");
+			 }
+
+			 // 2. 校验当前登录用户（只要登录即可操作，不管角色）
+			 LoginUser loginUser = (LoginUser) SecurityUtils.getSubject().getPrincipal();
+			 if (loginUser == null) {
+				 return Result.error("请先登录");
+			 }
+
+			 // 记录操作人信息
+			 String currentUserId = loginUser.getId();
+			 log.info("用户{}（角色：{}）操作学生征订同意，征订记录ID：{}",
+					 loginUser.getUsername(), loginUser.getRoleCode(), subscriptionId);
+
+			 // 3. 校验征订状态是否为"待确认"
+			 if (!"待确认".equals(subscription.getSubscribeStatus())) {
+				 return Result.error("该征订记录状态不是待确认，无法同意征订");
+			 }
+
+			 // 获取学生信息用于日志和账单更新
+			 TStudent student = tStudentService.getById(subscription.getStudentId());
+			 String studentNo = student != null ? student.getStudentId() : "未知学生";
+
+			 // 4. 更新征订状态为"已确认"
+			 subscription.setSubscribeStatus("已确认");
+			 subscription.setSubscribeTime(new Date());
+			 subscription.setUpdateTime(new Date());
+			 tSubscriptionService.updateById(subscription);
+			 log.info("学生{}同意征订，征订记录ID：{}", studentNo, subscriptionId);
+
+			 // 5. 创建领取记录
+			 TReceive receive = new TReceive();
+			 receive.setReceiveOperator(subscription.getStudentId());
+			 receive.setSubscriptionId(subscription.getId());
+			 receive.setReceiveStatus("未领取");
+			 receive.setReceiveRemark("");
+			 receive.setCreateTime(new Date());
+			 receive.setUpdateTime(new Date());
+			 log.info("准备创建领取记录：receiveOperator={}, subscriptionId={}, receiveStatus={}",
+					 receive.getReceiveOperator(), receive.getSubscriptionId(), receive.getReceiveStatus());
+			 boolean saveResult = tReceiveService.save(receive);
+			 log.info("创建领取记录结果：{}，领取记录ID：{}", saveResult, receive.getId());
+			 if (!saveResult) {
+				 log.error("创建领取记录失败，subscriptionId：{}", subscriptionId);
+				 return Result.error("创建领取记录失败");
+			 }
+			 log.info("为学生{}创建领取记录成功，关联征订记录ID：{}，领取记录ID：{}",
+					 studentNo, subscriptionId, receive.getId());
 
 
+
+			 // 6. 创建或更新个人账单记录
+			 if (student != null) {
+				 // 补充查询：专业名称、教材名称、教材定价/折扣
+				 TMajor major = tMajorService.getById(subscription.getMajorId()); // 查专业名称
+				 TTextbook textbook = tTextbookService.getById(subscription.getTextbookId()); // 查教材信息
+				 if (textbook != null) {
+					 // 计算折扣后费用
+					 BigDecimal price = textbook.getPrice() != null ? textbook.getPrice() : BigDecimal.ZERO;
+					 BigDecimal discount = textbook.getDiscount() != null ? textbook.getDiscount() : new BigDecimal("1");
+					 BigDecimal discountPrice = price.multiply(discount).setScale(2, BigDecimal.ROUND_HALF_UP);
+
+					 // 检查是否已存在账单记录
+					 QueryWrapper<StudentBill> billWrapper = new QueryWrapper<>();
+					 billWrapper.eq("student_id", studentNo)
+							 .eq("subscription_year", subscription.getSubscriptionYear())
+							 .eq("subscription_semester", subscription.getSubscriptionSemester())
+							 .eq("textbook_name", textbook.getTextbookName());
+					 StudentBill bill = studentBillService.getOne(billWrapper);
+					 if (bill != null) {
+						 // 更新账单记录
+						 bill.setSubscribeStatus("已确认");
+						 bill.setReceiveStatus("未领取");
+						 bill.setUpdateTime(new Date());
+						 studentBillService.updateById(bill);
+						 log.info("更新个人账单记录征订状态为已确认，账单ID：{}", bill.getId());
+					 } else {
+						 // 创建新账单记录
+						 StudentBill newBill = new StudentBill();
+						 newBill.setStudentId(studentNo); // 存业务学号
+						 newBill.setMajorName(major != null ? major.getMajorName() : ""); // 专业名称
+						 newBill.setSubscriptionYear(subscription.getSubscriptionYear()); // 征订学年
+						 newBill.setSubscriptionSemester(subscription.getSubscriptionSemester()); // 征订学期
+						 newBill.setTextbookName(textbook.getTextbookName()); // 教材名称
+						 newBill.setPrice(price); // 教材定价
+						 newBill.setDiscountPrice(discountPrice); // 折扣后费用
+						 newBill.setSubscribeStatus("已确认"); // 征订状态
+						 newBill.setReceiveStatus("未领取"); // 领取状态
+						 newBill.setRemark(""); // 备注
+						 newBill.setCreateTime(new Date());
+						 newBill.setUpdateTime(new Date());
+						 studentBillService.save(newBill);
+						 log.info("创建个人账单记录成功，账单ID：{}", newBill.getId());
+					 }
+				 } else {
+					 log.warn("征订记录{}关联的教材不存在，跳过账单创建/更新", subscriptionId);
+				 }
+			 } else {
+				 log.warn("征订记录{}关联的学生不存在，跳过账单创建/更新", subscriptionId);
+			 }
+
+			 // 7. 更新总账单
+			 try {
+				 studentAllBillSummaryController.autoSummarySubscriptionData();
+				 log.info("同意征订后，触发总账单重新汇总");
+			 } catch (Exception e) {
+				 log.error("总账单更新失败", e);
+				 // 总账单更新失败不影响主流程
+			 }
+
+
+			 return Result.OK("同意征订成功！已创建领取记录");
+
+		 } catch (Exception e) {
+			 log.error("同意征订失败", e);
+			 return Result.error("同意征订失败：" + e.getMessage());
+		 }
+	 }
 
 }

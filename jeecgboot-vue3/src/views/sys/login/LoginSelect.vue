@@ -142,7 +142,7 @@
           isMultiDepart.value = false;
           return;
         }
-        
+
         let multi_depart = loginResult.multi_depart;
         //0:无部门 1:一个部门 2:多个部门
         if (multi_depart == 0) {

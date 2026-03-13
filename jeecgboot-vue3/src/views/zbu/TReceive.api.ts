@@ -15,6 +15,8 @@ enum Api {
   getStudentById = '/zbu/tStudent/queryById',
   getSubscriptionById = '/zbu/tSubscription/queryById',
   getTextbookById = '/zbu/tTextbook/queryById',
+  getMajorById = '/zbu/tMajor/queryById',
+  getCollegeById = '/zbu/tCollege/queryById',
   getStudentByNo= '/zbu/tReceive/getStudentByNo',
   batchUpdateReceiveStatus = '/zbu/tReceive/batchUpdateReceiveStatus',
 }
@@ -81,4 +83,14 @@ export const getStudentByNo = (studentNo) => {
 // 批量修改领取状态（保留）
 export const batchUpdateReceiveStatus = (params) => {
   return defHttp.post({url: Api.batchUpdateReceiveStatus, params});
+};
+
+// 根据专业ID查询信息
+export const getMajorById = (id) => {
+  return defHttp.get({ url: Api.getMajorById, params: { id } });
+};
+
+// 根据学院ID查询信息
+export const getCollegeById = (id) => {
+  return defHttp.get({ url: Api.getCollegeById, params: { id } });
 };
