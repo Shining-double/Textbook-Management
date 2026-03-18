@@ -6,7 +6,7 @@
       :form-config="tableFormConfig"
     >
       <template #tableTitle>
-        <!-- 🌟 修改1：所有角色显示批量修改按钮（区分文字） -->
+        <!--  修改1：所有角色显示批量修改按钮（区分文字） -->
         <div class="batch-btn-container">
           <a-button
             type="primary"
@@ -30,7 +30,7 @@
         <template v-if="isAdmin || isCounselor">
           <a-button type="primary" v-auth="'zbu:t_subscription:add'" @click="handleAdd" preIcon="ant-design:plus-outlined"> 新增</a-button>
           <a-button  type="primary" v-auth="'zbu:t_subscription:exportXls'" preIcon="ant-design:export-outlined" @click="onExportXls"> 导出</a-button>
-          <j-upload-button type="primary" v-auth="'zbu:t_subscription:importExcel'" preIcon="ant-design:import-outlined" @click="onImportXls">导入</j-upload-button>
+<!--          <j-upload-button type="primary" v-auth="'zbu:t_subscription:importExcel'" preIcon="ant-design:import-outlined" @click="onImportXls">导入</j-upload-button>-->
           <a-dropdown v-if="selectedRowKeys.length > 0">
             <template #overlay>
               <a-menu>
@@ -48,7 +48,7 @@
         <super-query v-if="isAdmin || isCounselor" :config="superQueryConfig" @search="handleSuperQuery" />
       </template>
 
-      <!-- 🌟 修改2：学生端隐藏操作列 -->
+      <!--  修改2：学生端隐藏操作列 -->
       <template #action="{ record }" v-if="!isStudent">
         <TableAction :actions="getTableAction(record)" :dropDownActions="getDropDownAction(record)"/>
       </template>
@@ -162,13 +162,13 @@ const getStudentInfoSafely = async (studentNo: string) => {
   }
 };
 
-// ========== 重构fetchTableData，彻底隔离学生端逻辑 ==========
+// ========== 重构fetchTableData，使用视图数据 ==========
 const fetchTableData = async (params = {}) => {
   try {
     const roleType = unref(userRoleType);
     console.log(`【${roleType}端】开始获取数据，参数：`, params);
 
-    // 1. 调用后端接口获取对应角色的全量数据
+    // 1. 调用后端接口获取对应角色的全量数据（使用视图）
     const res = await getMySubscription(params);
     const rawRecords = res?.success ? res.result : (Array.isArray(res) ? res : []);
 
@@ -176,82 +176,47 @@ const fetchTableData = async (params = {}) => {
       return {records: [], total: 0};
     }
 
-    // 2. 仅学生端执行：获取当前登录学生ID（彻底隔离，辅导员/管理员完全不进入）
+    // 2. 仅学生端执行：获取当前登录学生ID
     if (unref(isStudent)) {
+      // 首先从第一条记录中获取学生ID（兼容 studentId 和 student_id）
+      currentStudentId.value = rawRecords[0]?.studentId || rawRecords[0]?.student_id;
+
+      // 调试日志
+      console.log("【调试】从记录中获取的studentId:", currentStudentId.value);
+
+      // 尝试通过学号获取学生信息（可选）
       const userInfo = userStore.getUserInfo || {};
       const studentNo = userInfo.username || "";
       if (studentNo) {
-        const studentInfo = await getStudentInfoSafely(studentNo);
-        if (studentInfo) {
-          currentStudentInfo.value = studentInfo;
-          currentStudentId.value = studentInfo.id || studentInfo.studentId || studentNo;
-        } else {
-          currentStudentId.value = rawRecords[0]?.studentId || studentNo;
-        }
-      }
-    }
-
-    // 3. 格式化数据（所有角色统一逻辑）
-    const formattedRecords: Recordable[] = [];
-    for (const item of rawRecords) {
-      let studentNo = '未知学号';
-      let studentName = '未知姓名';
-      let textbookName = '未知教材';
-      let majorName = '未知专业';
-      let collegeName = '未知学院';
-
-      // 查询学生信息（异常静默处理）
-      if (item.studentId) {
         try {
-          const studentInfo = await getStudentById(item.studentId);
-          studentNo = studentInfo?.studentId || '未知学号';
-          studentName = studentInfo?.studentName || '未知姓名';
-        } catch (e) {
-          console.debug("查询学生信息失败：", e.message);
-        }
-      }
-      // 查询教材信息（异常静默处理）
-      if (item.textbookId) {
-        try {
-          const textbookInfo = await getTextbookById(item.textbookId);
-          textbookName = textbookInfo?.textbookName || textbookInfo?.name || '未知教材';
-        } catch (e) {
-          console.debug("查询教材信息失败：", e.message);
-        }
-      }
-      // 查询专业信息（异常静默处理）
-      if (item.majorId) {
-        try {
-          const majorInfo = await getMajorById(item.majorId);
-          majorName = majorInfo?.majorName || majorInfo?.name || '未知专业';
-          // 查询学院信息
-          if (majorInfo?.collegeId) {
-            try {
-              const collegeInfo = await getCollegeById(majorInfo.collegeId);
-              collegeName = collegeInfo?.collegeName || collegeInfo?.name || '未知学院';
-            } catch (e) {
-              console.debug("查询学院信息失败：", e.message);
-            }
+          const studentInfo = await getStudentInfoSafely(studentNo);
+          if (studentInfo) {
+            currentStudentInfo.value = studentInfo;
+            // 如果获取到学生信息，使用学生的数据库ID
+            currentStudentId.value = studentInfo.id;
+            console.log("【调试】从学生信息中获取的studentId:", currentStudentId.value);
           }
         } catch (e) {
-          console.debug("查询专业信息失败：", e.message);
+          console.debug("获取学生信息失败：", e.message);
         }
       }
-
-      formattedRecords.push({
-        ...item,
-        studentNo,
-        studentName,
-        textbookName,
-        majorName,
-        collegeName,
-        subscriptionSemester: item.subscriptionSemester || '',
-        subscriptionSemester_dictText: item.subscriptionSemester === '1' ? '第一学期' : '第二学期',
-        subscribeStatus: item.subscribeStatus || '0',
-        subscribeStatus_dictText: item.subscribeStatus === '1' ? '已征订' : '未征订',
-        key: item.id || Math.random().toString(36).substr(2, 9)
-      });
     }
+
+
+    // 3. 格式化数据（直接使用视图返回的数据）
+    const formattedRecords: Recordable[] = rawRecords.map(item => ({
+      ...item,
+      studentNo: item.studentNo || '未知学号',
+      studentName: item.studentName || '未知姓名',
+      textbookName: item.textbookName || '未知教材',
+      majorName: item.majorName || '未知专业',
+      collegeName: item.collegeName || '未知学院',
+      subscriptionSemester: item.subscriptionSemester || '',
+      subscriptionSemester_dictText: item.subscriptionSemester === '1' ? '第一学期' : '第二学期',
+      subscribeStatus: item.subscribeStatus || '0',
+      subscribeStatus_dictText: item.subscribeStatus === '1' ? '已征订' : '未征订',
+      key: item.id || Math.random().toString(36).substr(2, 9)
+    }));
 
     // 4. 仅管理员/辅导员执行前端筛选
     let filteredRecords = [...formattedRecords];
@@ -259,14 +224,14 @@ const fetchTableData = async (params = {}) => {
       if (params.studentId) {
         const searchKey = params.studentId.trim().toLowerCase();
         filteredRecords = filteredRecords.filter(item =>
-          item.studentNo.toLowerCase().includes(searchKey) ||
-          item.studentName.toLowerCase().includes(searchKey)
+          (item.studentNo || '').toLowerCase().includes(searchKey) ||
+          (item.studentName || '').toLowerCase().includes(searchKey)
         );
       }
       if (params.majorId) {
         const searchKey = params.majorId.trim().toLowerCase();
         filteredRecords = filteredRecords.filter(item =>
-          item.majorName.toLowerCase().includes(searchKey)
+          (item.majorName || '').toLowerCase().includes(searchKey)
         );
       }
       if (params.subscriptionYear) {
@@ -292,11 +257,9 @@ const fetchTableData = async (params = {}) => {
       }
       if (params.collegeName) {
         const searchKey = params.collegeName.trim().toLowerCase();
-        // 这里需要根据实际情况获取学院名称，暂时通过专业名称模糊匹配
-        // 后续可以优化为通过专业ID查询学院信息
         filteredRecords = filteredRecords.filter(item => {
           // 使用学院名称进行模糊匹配
-          return item.collegeName.toLowerCase().includes(searchKey);
+          return (item.collegeName || '').toLowerCase().includes(searchKey);
         });
       }
       if (params.studentIdPrefix) {
@@ -322,7 +285,9 @@ const fetchTableData = async (params = {}) => {
   }
 };
 
-// 注册表格（🌟 修改3：学生端隐藏操作列）
+
+
+// 注册表格（ 修改3：学生端隐藏操作列）
 const { prefixCls, tableContext, onExportXls, onImportXls } = useListPage({
   tableProps:{
     title: '征订表',
@@ -338,7 +303,7 @@ const { prefixCls, tableContext, onExportXls, onImportXls } = useListPage({
       fieldMapToTime: [],
       show: false
     },
-    // 🌟 学生端不渲染操作列
+    //  学生端不渲染操作列
     actionColumn: unref(isAdmin) || unref(isCounselor) ? {
       width: 120,
       fixed:'right'
@@ -363,7 +328,7 @@ const { prefixCls, tableContext, onExportXls, onImportXls } = useListPage({
   importConfig: {
     url: getImportUrl,
     success: handleSuccess,
-    show: unref(isAdmin) || unref(isCounselor)
+    show: false //隐藏导入 unref(isAdmin) || unref(isCounselor)
   },
 });
 
@@ -371,7 +336,7 @@ const { prefixCls, tableContext, onExportXls, onImportXls } = useListPage({
 const [registerTable, {reload}, { rowSelection, selectedRowKeys }] = tableContext;
 const superQueryConfig = reactive(superQuerySchema);
 
-// ========== 🌟 修改4：批量修改征订状态（支持所有角色） ==========
+// ==========  修改4：批量修改征订状态（支持所有角色） ==========
 const handleBatchUpdateSubscribeStatus = async () => {
   try {
     let subscriptionIds: string[] = [];
@@ -379,12 +344,28 @@ const handleBatchUpdateSubscribeStatus = async () => {
 
     // 1. 分角色处理数据筛选
     if (unref(isStudent)) {
+      // 调试日志
+      console.log("【调试】currentStudentId.value:", currentStudentId.value);
+      console.log("【调试】tableData.records:", tableData.records);
+
       // 学生端：筛选自己的未征订记录
       const validRecords = tableData.records.filter(item => {
-        const isUnSubscribed = item.subscribeStatus !== '1' && item.subscribeStatus !== '已征订';
-        const isOwnRecord = item.studentId === currentStudentId.value;
+        const isUnSubscribed = item.subscribeStatus !== '1' && item.subscribeStatus !== '已征订' && item.subscribeStatus !== '已确认';
+        // 直接使用记录中的student_id进行匹配
+        const isOwnRecord = true; // 学生端只显示自己的记录，所以直接返回true
+
+        // 调试日志
+        console.log("【调试】记录student_id:", item.student_id);
+        console.log("【调试】isUnSubscribed:", isUnSubscribed);
+        console.log("【调试】isOwnRecord:", isOwnRecord);
+
+
         return isUnSubscribed && isOwnRecord;
       });
+
+      // 调试日志
+      console.log("【调试】validRecords:", validRecords);
+
       subscriptionIds = validRecords.map(item => item.id).filter(Boolean);
     } else {
       // 管理员/辅导员端：筛选选中的未征订记录
@@ -393,7 +374,7 @@ const handleBatchUpdateSubscribeStatus = async () => {
         return;
       }
       const validRecords = tableData.records.filter(item => {
-        const isUnSubscribed = item.subscribeStatus !== '1' && item.subscribeStatus !== '已征订';
+        const isUnSubscribed = item.subscribeStatus !== '1' && item.subscribeStatus !== '已征订' && item.subscribeStatus !== '已确认';
         const isSelected = selectedRowKeys.value.includes(item.id);
         return isUnSubscribed && isSelected;
       });
@@ -411,10 +392,15 @@ const handleBatchUpdateSubscribeStatus = async () => {
 
     // 3. 兼容loading（避免close报错，直接去掉loading逻辑）
     try {
+      // 对于学生端，使用第一条记录的student_id作为studentId参数
+      let studentIdForRequest = unref(isStudent)
+        ? tableData.records[0]?.student_id || currentStudentId.value
+        : userStore.getUserInfo.id;
+
       const res = await batchUpdateSubscribeStatus({
         ids: subscriptionIds,
         subscribeStatus: '1',
-        studentId: unref(isStudent) ? currentStudentId.value : userStore.getUserInfo.id
+        studentId: studentIdForRequest
       });
       createMessage.success(res.msg || `成功修改${subscriptionIds.length}条记录的征订状态！`);
     } catch (batchError) {
@@ -509,7 +495,23 @@ onMounted(async () => {
 :deep(.ant-input), :deep(.ant-picker), :deep(.ant-select-selector), :deep(.ant-input-number) {
   width: 200px; // 统一宽度（可根据需要调整）
   height: 20px; // 统一高度
-  padding: 0 12px; // 统一内边距
+  padding: 0 11px; // 统一内边距
+  box-sizing: border-box;
+}
+
+
+:deep(.ant-select) {
+  width: 200px !important;
+  min-width: 200px !important;
+  height: 20px;
+  flex: none !important;     /* 核心：禁止弹性收缩 */
+  display: inline-flex;
+  align-items: center;
+}
+
+// 禁止下拉框文字换行，保持样式稳定
+:deep(.ant-select-selection-item) {
+  white-space: nowrap !important;
 }
 
 // 按钮样式

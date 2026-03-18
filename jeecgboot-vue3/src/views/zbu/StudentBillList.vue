@@ -19,7 +19,7 @@
             <a-button type="primary" v-auth="'zbu:student_bill:add'" @click="handleAdd" preIcon="ant-design:plus-outlined"> 新增</a-button>
             <a-button type="primary" v-auth="'zbu:student_bill:sync'" @click="handleSync" preIcon="ant-design:sync-outlined" style="margin-left: 8px;"> 同步征订数据</a-button>
             <a-button  type="primary" v-auth="'zbu:student_bill:exportXls'" preIcon="ant-design:export-outlined" @click="onExportXls"> 导出</a-button>
-            <j-upload-button type="primary" v-auth="'zbu:student_bill:importExcel'" preIcon="ant-design:import-outlined" @click="onImportXls">导入</j-upload-button>
+<!--            <j-upload-button type="primary" v-auth="'zbu:student_bill:importExcel'" preIcon="ant-design:import-outlined" @click="onImportXls">导入</j-upload-button>-->
             <a-dropdown v-if="selectedRowKeys.length > 0">
               <template #overlay>
                 <a-menu>
@@ -307,7 +307,7 @@ const { tableContext, onExportXls, onImportXls } = useListPage({
   importConfig: {
     url: getImportUrl,
     success: handleSuccess,
-    show: unref(isAdmin)
+    show: false //隐藏导入 unref(isAdmin)
   },
 });
 

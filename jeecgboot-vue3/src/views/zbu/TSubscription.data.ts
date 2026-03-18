@@ -112,7 +112,7 @@ export const searchFormSchema: FormSchema[] = [
 	{
       label: "征订学期",
       field: 'subscriptionSemester',
-      component: 'JSelectMultiple',
+      component: 'JDictSelectTag',
       componentProps:{
           dictCode:"semester"
       },
@@ -121,7 +121,7 @@ export const searchFormSchema: FormSchema[] = [
 	{
       label: "征订状态",
       field: 'subscribeStatus',
-      component: 'JSelectMultiple',
+      component: 'JDictSelectTag',
       componentProps:{
           dictCode:"subscribe_status"
       },

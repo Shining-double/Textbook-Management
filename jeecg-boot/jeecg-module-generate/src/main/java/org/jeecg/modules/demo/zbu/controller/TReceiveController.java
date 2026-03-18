@@ -35,6 +35,7 @@ import org.jeecgframework.poi.excel.entity.ImportParams;
 import org.jeecgframework.poi.excel.view.JeecgEntityExcelView;
 import org.jeecg.common.system.base.controller.JeecgController;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
@@ -76,6 +77,8 @@ public class TReceiveController extends JeecgController<TReceive, ITReceiveServi
      private ITCounselorService tCounselorService;
      @Autowired
      private ITClassService tClassService;
+	 @Autowired
+	 private JdbcTemplate jdbcTemplate;
 
 	 // 角色编码常量
 	 private static final String ADMIN_ROLE_CODE = "admin";
@@ -496,124 +499,122 @@ public class TReceiveController extends JeecgController<TReceive, ITReceiveServi
 		 return "";
 	 }
 
-     @AutoLog(value = "领取表-获取我的领取记录")
-     @Operation(summary="获取当前登录用户的领取记录", description="管理员查所有、辅导员查管理班级、学生查自己")
-     @GetMapping(value = "/getMyReceive")
-     public Result<List<TReceive>> getMyReceive() {
-         try {
-             // 1. 获取当前登录用户（和征订表完全一致）
-             Subject subject = SecurityUtils.getSubject();
-             if (subject == null || !subject.isAuthenticated()) {
-                 log.warn("用户未登录，无法获取领取记录");
-                 return Result.error("用户未登录，无法获取领取记录");
-             }
-             LoginUser loginUser = (LoginUser) subject.getPrincipal();
-             if (loginUser == null) {
-                 log.warn("未获取到当前登录用户信息");
-                 return Result.error("未获取到当前登录用户信息");
-             }
+	 @AutoLog(value = "领取表-获取我的领取记录")
+	 @Operation(summary = "获取当前登录用户的领取记录", description = "管理员查所有、辅导员查管理班级、学生查自己")
+	 @GetMapping(value = "/getMyReceive")
+	 public Result<List<Map<String, Object>>> getMyReceive() {
+		 try {
+			 // 1. 获取当前登录用户（和征订表完全一致）
+			 Subject subject = SecurityUtils.getSubject();
+			 if (subject == null || !subject.isAuthenticated()) {
+				 log.warn("用户未登录，无法获取领取记录");
+				 return Result.error("用户未登录，无法获取领取记录");
+			 }
+			 LoginUser loginUser = (LoginUser) subject.getPrincipal();
+			 if (loginUser == null) {
+				 log.warn("未获取到当前登录用户信息");
+				 return Result.error("未获取到当前登录用户信息");
+			 }
 
-             log.info("当前登录用户: {}，角色码: {}", loginUser.getUsername(), loginUser.getRoleCode());
+			 log.info("当前登录用户: {}，角色码: {}", loginUser.getUsername(), loginUser.getRoleCode());
 
-             // 2. 解析角色编码，判断用户类型（兼容多角色逗号分隔，和征订表一致）
-             String roleCodeStr = loginUser.getRoleCode();
-             boolean isAdmin = false;
-             boolean isCounselor = false;
-             if (roleCodeStr != null && !roleCodeStr.isEmpty()) {
-                 String[] roleCodes = roleCodeStr.split(",");
-                 for (String code : roleCodes) {
-                     code = code.trim();
-                     if ("admin".equals(code)) {
-                         isAdmin = true;
-                         break; // 管理员优先级最高
-                     }
-                     if ("counselor".equals(code)) {
-                         isCounselor = true;
-                     }
-                 }
-             }
-             // 管理员用户名兜底判断（和征订表一致）
-             if (!isAdmin && "admin".equals(loginUser.getUsername())) {
-                 isAdmin = true;
-             }
+			 // 2. 解析角色编码，判断用户类型（兼容多角色逗号分隔，和征订表一致）
+			 String roleCodeStr = loginUser.getRoleCode();
+			 boolean isAdmin = false;
+			 boolean isCounselor = false;
+			 if (roleCodeStr != null && !roleCodeStr.isEmpty()) {
+				 String[] roleCodes = roleCodeStr.split(",");
+				 for (String code : roleCodes) {
+					 code = code.trim();
+					 if ("admin".equals(code)) {
+						 isAdmin = true;
+						 break; // 管理员优先级最高
+					 }
+					 if ("counselor".equals(code)) {
+						 isCounselor = true;
+					 }
+				 }
+			 }
+			 // 管理员用户名兜底判断（和征订表一致）
+			 if (!isAdmin && "admin".equals(loginUser.getUsername())) {
+				 isAdmin = true;
+			 }
 
-             List<TReceive> receiveList = new ArrayList<>();
-             if (isAdmin) {
-                 // 管理员：查询所有领取记录（和征订表一致）
-                 QueryWrapper<TReceive> adminWrapper = new QueryWrapper<>();
-                 adminWrapper.orderByDesc("receive_time");
-                 receiveList = tReceiveService.list(adminWrapper);
-                 log.info("管理员模式，查询到{}条领取记录", receiveList.size());
-             } else if (isCounselor) {
-                 // ========== 辅导员逻辑（完全仿照征订表） ==========
-                 // 步骤1：通过sys_user.id查询辅导员信息
-                 QueryWrapper<TCounselor> counselorWrapper = new QueryWrapper<>();
-                 counselorWrapper.eq("user_id", loginUser.getId()); // t_counselor的userId关联sys_user.id
-                 TCounselor counselor = tCounselorService.getOne(counselorWrapper);
-                 if (counselor == null) {
-                     log.warn("当前登录用户未关联辅导员信息，用户ID: {}", loginUser.getId());
-                     return Result.error("当前登录用户未关联辅导员信息");
-                 }
+			 List<Map<String, Object>> receiveList = new ArrayList<>();
+			 if (isAdmin) {
+				 // 管理员：查询所有领取记录（使用视图）
+				 receiveList = jdbcTemplate
+						 .queryForList("SELECT * FROM v_receive_with_details ORDER BY receiveTime DESC");
+				 log.info("管理员模式，查询到{}条领取记录", receiveList.size());
+			 } else if (isCounselor) {
+				 // ========== 辅导员逻辑（完全仿照征订表） ==========
+				 // 步骤1：通过sys_user.id查询辅导员信息
+				 QueryWrapper<TCounselor> counselorWrapper = new QueryWrapper<>();
+				 counselorWrapper.eq("user_id", loginUser.getId()); // t_counselor的userId关联sys_user.id
+				 TCounselor counselor = tCounselorService.getOne(counselorWrapper);
+				 if (counselor == null) {
+					 log.warn("当前登录用户未关联辅导员信息，用户ID: {}", loginUser.getId());
+					 return Result.error("当前登录用户未关联辅导员信息");
+				 }
 
-                 // 步骤2：查询该辅导员管理的所有班级
-                 QueryWrapper<TClass> classWrapper = new QueryWrapper<>();
-                 classWrapper.eq("counselor_id", counselor.getId()); // t_class的counselorId关联t_counselor.id
-                 List<TClass> classList = tClassService.list(classWrapper);
-                 if (classList.isEmpty()) {
-                     log.info("辅导员{}暂无管理的班级，无领取记录", counselor.getCounselorName());
-                     return Result.OK("你暂无管理的班级，无领取记录", receiveList);
-                 }
-                 // 提取班级ID列表
-                 List<String> classIds = classList.stream().map(TClass::getId).collect(Collectors.toList());
+				 // 步骤2：查询该辅导员管理的所有班级
+				 QueryWrapper<TClass> classWrapper = new QueryWrapper<>();
+				 classWrapper.eq("counselor_id", counselor.getId()); // t_class的counselorId关联t_counselor.id
+				 List<TClass> classList = tClassService.list(classWrapper);
+				 if (classList.isEmpty()) {
+					 log.info("辅导员{}暂无管理的班级，无领取记录", counselor.getCounselorName());
+					 return Result.OK("你暂无管理的班级，无领取记录", receiveList);
+				 }
+				 // 提取班级ID列表
+				 List<String> classIds = classList.stream().map(TClass::getId).collect(Collectors.toList());
 
-                 // 步骤3：查询这些班级下的所有学生
-                 QueryWrapper<TStudent> studentWrapper = new QueryWrapper<>();
-                 studentWrapper.in("class_id", classIds); // t_student的classId关联t_class.id
-                 List<TStudent> studentList = tStudentService.list(studentWrapper);
-                 if (studentList.isEmpty()) {
-                     log.info("辅导员{}管理的班级暂无学生，无领取记录", counselor.getCounselorName());
-                     return Result.OK("你管理的班级暂无学生，无领取记录", receiveList);
-                 }
-                 // 提取学生ID列表（t_receive的receive_operator关联t_student.id）
-                 List<String> studentIds = studentList.stream().map(TStudent::getId).collect(Collectors.toList());
+				 // 步骤3：查询这些班级下的所有学生
+				 QueryWrapper<TStudent> studentWrapper = new QueryWrapper<>();
+				 studentWrapper.in("class_id", classIds); // t_student的classId关联t_class.id
+				 List<TStudent> studentList = tStudentService.list(studentWrapper);
+				 if (studentList.isEmpty()) {
+					 log.info("辅导员{}管理的班级暂无学生，无领取记录", counselor.getCounselorName());
+					 return Result.OK("你管理的班级暂无学生，无领取记录", receiveList);
+				 }
+				 // 提取学生ID列表（t_receive的receive_operator关联t_student.id）
+				 List<String> studentIds = studentList.stream().map(TStudent::getId).collect(Collectors.toList());
 
-                 // 步骤4：查询这些学生的所有领取记录
-                 QueryWrapper<TReceive> counselorReceiveWrapper = new QueryWrapper<>();
-                 counselorReceiveWrapper.in("receive_operator", studentIds)
-                         .orderByDesc("receive_time");
-                 receiveList = tReceiveService.list(counselorReceiveWrapper);
-                 log.info("辅导员{}模式，查询到管理班级下{}条领取记录", counselor.getCounselorName(), receiveList.size());
-             } else {
-                 // ========== 学生逻辑（仿照征订表，替换为领取表字段） ==========
-                 String username = loginUser.getUsername();
-                 if (username == null || username.isEmpty()) {
-                     log.warn("当前登录用户无用户名（学号）信息");
-                     return Result.error("当前登录用户无用户名（学号）信息");
-                 }
+				 // 步骤4：查询这些学生的所有领取记录（使用视图）
+				 String studentIdInClause = String.join(",",
+						 studentIds.stream().map(id -> "'" + id + "'").collect(Collectors.toList()));
+				 receiveList = jdbcTemplate
+						 .queryForList("SELECT * FROM v_receive_with_details WHERE receiveOperator IN ("
+								 + studentIdInClause + ") ORDER BY receiveTime DESC");
+				 log.info("辅导员{}模式，查询到管理班级下{}条领取记录", counselor.getCounselorName(), receiveList.size());
+			 } else {
+				 // ========== 学生逻辑（仿照征订表，替换为领取表字段） ==========
+				 String username = loginUser.getUsername();
+				 if (username == null || username.isEmpty()) {
+					 log.warn("当前登录用户无用户名（学号）信息");
+					 return Result.error("当前登录用户无用户名（学号）信息");
+				 }
 
-                 // 通过学号查询学生信息
-                 QueryWrapper<TStudent> studentWrapper = new QueryWrapper<>();
-                 studentWrapper.eq("student_id", username);
-                 TStudent student = tStudentService.getOne(studentWrapper);
-                 if (student == null) {
-                     log.warn("当前登录用户未关联学生信息，用户名: {}", username);
-                     return Result.error("当前登录用户未关联学生信息，用户名: " + username);
-                 }
+				 // 通过学号查询学生信息
+				 QueryWrapper<TStudent> studentWrapper = new QueryWrapper<>();
+				 studentWrapper.eq("student_id", username);
+				 TStudent student = tStudentService.getOne(studentWrapper);
+				 if (student == null) {
+					 log.warn("当前登录用户未关联学生信息，用户名: {}", username);
+					 return Result.error("当前登录用户未关联学生信息，用户名: " + username);
+				 }
 
-                 // 查询该学生的领取记录（receive_operator=学生id）
-                 QueryWrapper<TReceive> receiveWrapper = new QueryWrapper<>();
-                 receiveWrapper.eq("receive_operator", student.getId())
-                         .orderByDesc("receive_time");
-                 receiveList = tReceiveService.list(receiveWrapper);
-                 log.info("学生模式，查询到{}条领取记录", receiveList.size());
-             }
+				 // 查询该学生的领取记录（receive_operator=学生id）（使用视图）
+				 receiveList = jdbcTemplate.queryForList(
+						 "SELECT * FROM v_receive_with_details WHERE receiveOperator = ? ORDER BY receiveTime DESC",
+						 student.getId());
+				 log.info("学生模式，查询到{}条领取记录", receiveList.size());
+			 }
 
-             return Result.OK("", receiveList);
-         } catch (Exception e) {
-             log.error("获取领取记录失败", e);
-             return Result.error("获取失败：" + e.getMessage());
-         }
-     }
+			 return Result.OK("", receiveList);
+		 } catch (Exception e) {
+			 log.error("获取领取记录失败", e);
+			 return Result.error("获取失败：" + e.getMessage());
+		 }
+	 }
 
-
-}
+ }

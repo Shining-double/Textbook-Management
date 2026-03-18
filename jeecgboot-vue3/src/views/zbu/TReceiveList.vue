@@ -30,7 +30,7 @@
         <template v-if="isAdmin || isCounselor">
           <a-button type="primary" v-auth="'zbu:t_receive:add'" @click="handleAdd" preIcon="ant-design:plus-outlined"> 新增</a-button>
           <a-button  type="primary" v-auth="'zbu:t_receive:exportXls'" preIcon="ant-design:export-outlined" @click="onExportXls"> 导出</a-button>
-          <j-upload-button type="primary" v-auth="'zbu:t_receive:importExcel'" preIcon="ant-design:import-outlined" @click="onImportXls">导入</j-upload-button>
+          <!--          <j-upload-button type="primary" v-auth="'zbu:t_receive:importExcel'" preIcon="ant-design:import-outlined" @click="onImportXls">导入</j-upload-button>-->
           <a-dropdown v-if="selectedRowKeys.length > 0">
             <template #overlay>
               <a-menu>
@@ -91,14 +91,14 @@ import {
   batchUpdateReceiveStatus
 } from './TReceive.api';
 import { useUserStore } from '/@/store/modules/user';
-// 🌟 关键修改：只保留JeecgBoot封装的useMessage，放弃所有antd原生导入
+//  关键修改：只保留JeecgBoot封装的useMessage，放弃所有antd原生导入
 import { useMessage } from '/@/hooks/web/useMessage';
 import { getDateByPicker } from '/@/utils';
 
 type Recordable = { [key: string]: any };
 const fieldPickers = reactive({});
 const queryParam = reactive<any>({});
-// 🌟 恢复JeecgBoot封装的createMessage
+//  恢复JeecgBoot封装的createMessage
 const { createMessage } = useMessage();
 
 const [registerModal, {openModal}] = useModal();
@@ -150,7 +150,7 @@ const getStudentInfoSafely = async (studentNo: string) => {
   }
 };
 
-// ========== 获取表格数据（不变） ==========
+// ========== 重构fetchTableData，使用视图数据 ==========
 const fetchTableData = async (params = {}) => {
   try {
     const roleType = unref(userRoleType);
@@ -177,68 +177,20 @@ const fetchTableData = async (params = {}) => {
       }
     }
 
-    const formattedRecords: Recordable[] = [];
-    for (const item of rawRecords) {
-      let studentNo = '未知学号';
-      let studentName = '未知姓名';
-      let textbookName = '未知教材';
-      let collegeName = '未知学院';
-
-      if (item.receiveOperator) {
-        try {
-          const studentInfo = await getStudentById(item.receiveOperator);
-          studentNo = studentInfo?.studentId || studentInfo?.result?.studentId || '未知学号';
-          studentName = studentInfo?.studentName || studentInfo?.result?.studentName || '未知姓名';
-          // 查询专业信息
-          const majorId = studentInfo?.majorId || studentInfo?.result?.majorId;
-          if (majorId) {
-            try {
-              const majorInfo = await getMajorById(majorId);
-              // 查询学院信息
-              const collegeId = majorInfo?.collegeId || majorInfo?.result?.collegeId;
-              if (collegeId) {
-                try {
-                  const collegeInfo = await getCollegeById(collegeId);
-                  collegeName = collegeInfo?.collegeName || collegeInfo?.result?.collegeName || '未知学院';
-                } catch (e) {
-                  console.debug("查询学院信息失败：", e.message);
-                }
-              }
-            } catch (e) {
-              console.debug("查询专业信息失败：", e.message);
-            }
-          }
-        } catch (e) {
-          console.debug("查询学生信息失败：", e.message);
-        }
-      }
-      if (item.subscriptionId) {
-        try {
-          const subscriptionInfo = await getSubscriptionById(item.subscriptionId);
-          const textbookId = subscriptionInfo?.textbookId || subscriptionInfo?.result?.textbookId || "";
-          if (textbookId) {
-            const textbookInfo = await getTextbookById(textbookId);
-            textbookName = textbookInfo?.textbookName || textbookInfo?.result?.textbookName || '未知教材';
-          }
-        } catch (e) {
-          console.debug("查询教材信息失败：", e.message);
-        }
-      }
-
-      formattedRecords.push({
-        ...item,
-        studentNo,
-        studentName,
-        textbookName,
-        collegeName,
-        receiveStatus: item.receiveStatus || '0',
-        receiveStatus_dictText: item.receiveStatus === '1' ? '已领取' : '未领取',
-        key: item.id || Math.random().toString(36).substr(2, 9)
-      });
-    }
+    // 直接使用视图返回的数据，移除串行异步请求
+    const formattedRecords: Recordable[] = rawRecords.map(item => ({
+      ...item,
+      studentNo: item.studentNo || '未知学号',
+      studentName: item.studentName || '未知姓名',
+      textbookName: item.textbookName || '未知教材',
+      collegeName: item.collegeName || '未知学院',
+      receiveStatus: item.receiveStatus || '0',
+      receiveStatus_dictText: item.receiveStatus === '1' ? '已领取' : '未领取',
+      key: item.id || Math.random().toString(36).substr(2, 9)
+    }));
 
     let filteredRecords = [...formattedRecords];
-    // console.log('【领取表筛选】参数：', params);
+    console.log('【领取表筛选】参数：', params);
     if ((unref(isAdmin) || unref(isCounselor)) && Object.keys(params).length > 0) {
       if (params.studentNo) {
         const searchKey = params.studentNo.trim().toLowerCase();
@@ -278,16 +230,16 @@ const fetchTableData = async (params = {}) => {
           statusList = [params.receiveStatus];
         }
 
-        // console.log('【领取表筛选】statusList：', statusList);
+        console.log('【领取表筛选】statusList：', statusList);
 
         // 调试：查看过滤前的记录
-        // console.log('【领取表筛选】过滤前记录数：', filteredRecords.length);
-        // console.log('【领取表筛选】过滤前记录状态：', filteredRecords.map(item => ({id: item.id, receiveStatus: item.receiveStatus, receiveStatus_dictText: item.receiveStatus_dictText})));
+        console.log('【领取表筛选】过滤前记录数：', filteredRecords.length);
+        console.log('【领取表筛选】过滤前记录状态：', filteredRecords.map(item => ({id: item.id, receiveStatus: item.receiveStatus, receiveStatus_dictText: item.receiveStatus_dictText})));
 
         filteredRecords = filteredRecords.filter(item => {
           // 处理不同的状态值格式
           const itemStatus = item.receiveStatus || '0';
-          // console.log('【领取表筛选】当前记录状态：', item.id, itemStatus, item.receiveStatus_dictText);
+          console.log('【领取表筛选】当前记录状态：', item.id, itemStatus, item.receiveStatus_dictText);
 
           const match = statusList.some(status => {
             // 处理状态值
@@ -300,7 +252,7 @@ const fetchTableData = async (params = {}) => {
               }
             }
 
-            // console.log('【领取表筛选】比较状态：', statusValue, typeof statusValue, 'vs', itemStatus);
+            console.log('【领取表筛选】比较状态：', statusValue, typeof statusValue, 'vs', itemStatus);
 
             // 处理后端返回的文本状态值
             if (itemStatus === '未领取' || itemStatus === '未领') {
@@ -315,13 +267,13 @@ const fetchTableData = async (params = {}) => {
             }
           });
 
-          // console.log('【领取表筛选】记录匹配结果：', item.id, match);
+          console.log('【领取表筛选】记录匹配结果：', item.id, match);
           return match;
         });
 
         // 调试：查看过滤后的记录
-        // console.log('【领取表筛选】过滤后记录数：', filteredRecords.length);
-        // console.log('【领取表筛选】过滤后记录状态：', filteredRecords.map(item => ({id: item.id, receiveStatus: item.receiveStatus, receiveStatus_dictText: item.receiveStatus_dictText})));
+        console.log('【领取表筛选】过滤后记录数：', filteredRecords.length);
+        console.log('【领取表筛选】过滤后记录状态：', filteredRecords.map(item => ({id: item.id, receiveStatus: item.receiveStatus, receiveStatus_dictText: item.receiveStatus_dictText})));
       }
       if (params.collegeName) {
         const searchKey = params.collegeName.trim().toLowerCase();
@@ -383,14 +335,14 @@ const { prefixCls, tableContext, onExportXls, onImportXls } = useListPage({
   importConfig: {
     url: getImportUrl,
     success: handleSuccess,
-    show: unref(isAdmin) || unref(isCounselor)
+    show: false // 隐藏导入
   },
 });
 
 const [registerTable, {reload}, { rowSelection, selectedRowKeys }] = tableContext;
 const superQueryConfig = reactive(superQuerySchema);
 
-// ========== 批量修改领取状态：🌟 核心修改（去掉所有loading，彻底无报错） ==========
+// ========== 批量修改领取状态： 核心修改（去掉所有loading，彻底无报错） ==========
 const handleBatchUpdateReceiveStatus = async () => {
   try {
     let receiveIds: string[] = [];
@@ -428,7 +380,7 @@ const handleBatchUpdateReceiveStatus = async () => {
       return;
     }
 
-    // 🌟 关键修改：去掉所有loading相关代码，直接调用接口
+    //  关键修改：去掉所有loading相关代码，直接调用接口
     const res = await batchUpdateReceiveStatus({
       ids: receiveIds,
       receiveStatus: '1',
@@ -524,9 +476,20 @@ onMounted(async () => {
 </script>
 
 <style lang="less" scoped>
-:deep(.ant-picker),:deep(.ant-input-number){width: 100%;}
+:deep(.ant-picker),:deep(.ant-input-number),:deep(.ant-select-selector),:deep(.ant-input){width: 100%;}
 :deep(.ant-table-actions .ant-btn-primary) {padding: 0 8px;margin-right: 4px;}
 .batch-btn-container {display: flex;justify-content: flex-start;width: 100%;padding-left: 8px;margin-right: 12px;}
 :deep(.ant-table-title) {display: flex;justify-content: flex-start;align-items: center;padding: 16px 24px !important;}
 :deep(.ant-form-item-control-input-content) {display: flex;gap: 8px;}
+
+:deep(.ant-select) {
+  width: 130px !important; /* 固定下拉框宽度（可自行调整数值） */
+  min-width: 130px !important;
+  flex: none !important; /* 禁止弹性收缩 */
+}
+:deep(.ant-select-selector) {
+  width: 100% !important;
+  min-width: 130px !important;
+  white-space: nowrap; /* 禁止文字换行 */
+}
 </style>
