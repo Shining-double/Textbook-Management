@@ -728,58 +728,10 @@ public class TStudentController extends JeecgController<TStudent, ITStudentServi
 				 tSubscriptionService.save(subscription);
 				 log.info("为学生{}生成征订记录：{}", student.getStudentId(), subscription.getId());
 
-				 // ========== 生成领取记录 ==========
-				 QueryWrapper<TReceive> receiveExistWrapper = new QueryWrapper<>();
-				 receiveExistWrapper.eq("receive_operator", student.getId())
-						 .eq("subscription_id", subscription.getId());
-				 if (tReceiveService.count(receiveExistWrapper) == 0) {
-					 TReceive receive = new TReceive();
-					 receive.setReceiveOperator(student.getId()); // 领取操作人=学生ID
-					 receive.setSubscriptionId(subscription.getId()); // 关联征订记录ID
-					 receive.setReceiveStatus("未领取"); // 初始领取状态
-					 receive.setCreateTime(new Date());
-					 receive.setUpdateTime(new Date());
-					 tReceiveService.save(receive);
-					 log.info("为学生{}生成领取记录：{}", student.getStudentId(), receive.getId());
-				 }
 
-				 // ========== 生成个人账单记录 ==========
-				 // 3.1 查询教材信息（计算折扣价）
-				 TTextbook textbook = tTextbookService.getById(selection.getTextbookId());
-				 BigDecimal price = textbook != null && textbook.getPrice() != null ? textbook.getPrice() : BigDecimal.ZERO;
-				 BigDecimal discount = textbook != null && textbook.getDiscount() != null ? textbook.getDiscount() : new BigDecimal("1");
-				 BigDecimal discountPrice = price.multiply(discount).setScale(2, BigDecimal.ROUND_HALF_UP);
-
-				 // 3.2 查询专业名称
-				 TMajor major = tMajorService.getById(selection.getMajorId());
-				 String majorName = major != null ? major.getMajorName() : "";
-
-				 // 3.3 防重复生成账单
-				 QueryWrapper<StudentBill> billExistWrapper = new QueryWrapper<>();
-				 billExistWrapper.eq("student_id", student.getStudentId()) // 学生业务学号
-						 .eq("subscription_year", selection.getSchoolYear())
-						 .eq("subscription_semester", selection.getSemester())
-						 .eq("textbook_name", textbook != null ? textbook.getTextbookName() : "");
-				 if (studentBillService.count(billExistWrapper) == 0) {
-					 StudentBill bill = new StudentBill();
-					 bill.setStudentId(student.getStudentId()); // 业务学号
-					 bill.setMajorName(majorName); // 专业名称
-					 bill.setSubscriptionYear(selection.getSchoolYear()); // 征订学年
-					 bill.setSubscriptionSemester(selection.getSemester()); // 征订学期
-					 bill.setTextbookName(textbook != null ? textbook.getTextbookName() : "未知教材"); // 教材名称
-					 bill.setPrice(price); // 教材定价
-					 bill.setDiscountPrice(discountPrice); // 折扣后费用
-					 bill.setSubscribeStatus("未设置"); // 征订状态
-					 bill.setReceiveStatus("未领取"); // 领取状态
-					 bill.setRemark("");
-					 bill.setCreateTime(new Date());
-					 bill.setUpdateTime(new Date());
-					 studentBillService.save(bill);
-					 log.info("为学生{}生成个人账单记录：{}", student.getStudentId(), bill.getId());
-				 }
 			 }
 		 } catch (Exception e) {
-			 log.error("为学生{}生成征订/领取/账单记录失败", student.getStudentId(), e);
+			 log.error("为学生{}生成征订记录失败", student.getStudentId(), e);
 			 throw new RuntimeException("学生新增成功，但生成教材征订相关记录失败：" + e.getMessage());
 		 }
 	 }

@@ -134,20 +134,7 @@ public class TSubscriptionController extends JeecgController<TSubscription, ITSu
 		// 1. 保存征订表数据
 		tSubscriptionService.save(tSubscription);
 
-		// 2. 自动创建对应的领取表记录
-		TReceive tReceive = new TReceive();
-		// 设置关联的征订表ID（核心关联字段）
-		tReceive.setSubscriptionId(tSubscription.getId());
-		tReceive.setReceiveOperator(tSubscription.getStudentId());
-		// 设置默认领取状态（根据你的字典配置，这里假设0=未领取，可根据实际调整）
-		tReceive.setReceiveStatus("0");
 
-		// 设置创建/更新时间
-		tReceive.setCreateTime(new Date());
-		tReceive.setUpdateTime(new Date());
-
-		// 3. 保存领取表数据
-		tReceiveService.save(tReceive);
 		return Result.OK("添加成功！");
 	}
 	

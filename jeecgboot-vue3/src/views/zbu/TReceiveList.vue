@@ -284,6 +284,27 @@ const fetchTableData = async (params = {}) => {
       }
     }
 
+    // 处理排序
+    if (params.column && params.order) {
+      filteredRecords.sort((a, b) => {
+        const field = params.column;
+        const order = params.order === 'asc' ? 1 : -1;
+
+        // 处理不同类型字段的排序
+        if (typeof a[field] === 'string' && typeof b[field] === 'string') {
+          return a[field].localeCompare(b[field]) * order;
+        } else if (typeof a[field] === 'number' && typeof b[field] === 'number') {
+          return (a[field] - b[field]) * order;
+        } else if (a[field] instanceof Date && b[field] instanceof Date) {
+          return (a[field].getTime() - b[field].getTime()) * order;
+        } else if (a[field] && b[field]) {
+          // 处理其他类型的排序
+          return String(a[field]).localeCompare(String(b[field])) * order;
+        }
+        return 0;
+      });
+    }
+
     return {
       records: filteredRecords,
       total: filteredRecords.length
