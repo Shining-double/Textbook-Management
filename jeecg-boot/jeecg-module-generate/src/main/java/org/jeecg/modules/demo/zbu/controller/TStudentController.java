@@ -90,6 +90,13 @@ public class TStudentController extends JeecgController<TStudent, ITStudentServi
 	 private ITTextbookService tTextbookService;
 	 @Autowired
 	 private ITMajorService tMajorService;
+	 @Autowired
+	 private ITClassService tClassService;
+	 @Autowired
+	 private ITCounselorService tCounselorService;
+	 // 注入JdbcTemplate用于执行原生SQL查询视图
+	 @Autowired
+	 private org.springframework.jdbc.core.JdbcTemplate jdbcTemplate;
 
 	 // 学生角色编码
 	 private static final String STUDENT_ROLE_CODE = "student";
@@ -112,16 +119,91 @@ public class TStudentController extends JeecgController<TStudent, ITStudentServi
 								   HttpServletRequest req) {
 
 
-        // 自定义查询规则
-        Map<String, QueryRuleEnum> customeRuleMap = new HashMap<>();
-        // 自定义多选的查询规则为：LIKE_WITH_OR
-        customeRuleMap.put("status", QueryRuleEnum.LIKE_WITH_OR);
-        QueryWrapper<TStudent> queryWrapper = QueryGenerator.initQueryWrapper(tStudent, req.getParameterMap(),customeRuleMap);
+//        // 自定义查询规则
+//        Map<String, QueryRuleEnum> customeRuleMap = new HashMap<>();
+//        // 自定义多选的查询规则为：LIKE_WITH_OR
+//        customeRuleMap.put("status", QueryRuleEnum.LIKE_WITH_OR);
+//        QueryWrapper<TStudent> queryWrapper = QueryGenerator.initQueryWrapper(tStudent, req.getParameterMap(),customeRuleMap);
+//
+//		// 学院模糊查询
+//		String collegeName = req.getParameter("collegeName");
+//		if (oConvertUtils.isNotEmpty(collegeName)) {
+//			queryWrapper.inSql("major_id", "SELECT id FROM t_major WHERE college_id IN (SELECT id FROM t_college WHERE college_name LIKE CONCAT('%', '" + collegeName + "', '%'))");
+//		}
+
+		// 获取当前登录用户
+		LoginUser loginUser = (LoginUser) SecurityUtils.getSubject().getPrincipal();
+		String username = loginUser.getUsername();
+
+		// 判断是否是管理员
+		boolean isAdmin = "admin".equals(username) || "sysadmin".equals(username);
+
+		// 判断是否是辅导员
+		boolean isCounselor = false;
+		List<SysUserRole> userRoleList = sysUserRoleService
+				.list(new LambdaQueryWrapper<SysUserRole>().eq(SysUserRole::getUserId, loginUser.getId()));
+		if (!userRoleList.isEmpty()) {
+			List<String> roleIds = userRoleList.stream().map(SysUserRole::getRoleId).collect(Collectors.toList());
+			List<SysRole> roleList = sysRoleService.listByIds(roleIds);
+			for (SysRole role : roleList) {
+				if ("counselor".equals(role.getRoleCode())) {
+					isCounselor = true;
+					break;
+				}
+			}
+		}
+
+
+		// 自定义查询规则
+		Map<String, QueryRuleEnum> customeRuleMap = new HashMap<>();
+		// 自定义多选的查询规则为：LIKE_WITH_OR
+		customeRuleMap.put("status", QueryRuleEnum.LIKE_WITH_OR);
+
+		// 移除majorId参数，避免QueryGenerator创建错误的查询条件
+		Map<String, String[]> paramMap = new HashMap<>(req.getParameterMap());
+		String[] majorIdParams = paramMap.remove("majorId");
+
+		QueryWrapper<TStudent> queryWrapper = QueryGenerator.initQueryWrapper(tStudent, paramMap,
+				customeRuleMap);
 
 		// 学院模糊查询
 		String collegeName = req.getParameter("collegeName");
 		if (oConvertUtils.isNotEmpty(collegeName)) {
-			queryWrapper.inSql("major_id", "SELECT id FROM t_major WHERE college_id IN (SELECT id FROM t_college WHERE college_name LIKE CONCAT('%', '" + collegeName + "', '%'))");
+			queryWrapper.inSql("major_id",
+					"SELECT id FROM t_major WHERE college_id IN (SELECT id FROM t_college WHERE college_name LIKE CONCAT('%', '"
+							+ collegeName + "', '%'))");
+		}
+
+		// 专业模糊查询
+		if (majorIdParams != null && majorIdParams.length > 0) {
+			String majorName = majorIdParams[0];
+			if (oConvertUtils.isNotEmpty(majorName)) {
+				queryWrapper.inSql("major_id",
+						"SELECT id FROM t_major WHERE major_name LIKE CONCAT('%', '" + majorName + "', '%')");
+			}
+		}
+
+		// 辅导员逻辑：只显示自己管理的班级学生
+		if (isCounselor && !isAdmin) {
+			// 优化：使用视图查询，减少多次关联查询
+			String sql = "SELECT student_id FROM v_student_with_counselor WHERE counselor_user_id = ?";
+			List<Map<String, Object>> resultList = jdbcTemplate.queryForList(sql, loginUser.getId());
+
+			if (!resultList.isEmpty()) {
+				// 提取学生ID列表
+				List<String> studentIds = resultList.stream()
+						.map(item -> item.get("student_id").toString())
+						.collect(Collectors.toList());
+				// 过滤学生表，只显示这些学生
+				queryWrapper.in("id", studentIds);
+			} else {
+				// 没有学生数据，返回空结果
+				Page<TStudent> page = new Page<TStudent>(pageNo, pageSize);
+				IPage<TStudent> pageList = new Page<>(pageNo, pageSize);
+				pageList.setRecords(new ArrayList<>());
+				pageList.setTotal(0);
+				return Result.OK(pageList);
+			}
 		}
 
 		Page<TStudent> page = new Page<TStudent>(pageNo, pageSize);
@@ -145,6 +227,50 @@ public class TStudentController extends JeecgController<TStudent, ITStudentServi
 			String studentNo = tStudent.getStudentId();
 			if (oConvertUtils.isEmpty(studentNo)) {
 				return Result.error("学生学号不能为空！");
+			}
+
+			// 获取当前登录用户
+			LoginUser loginUser = (LoginUser) SecurityUtils.getSubject().getPrincipal();
+			String username = loginUser.getUsername();
+
+			// 判断是否是管理员
+			boolean isAdmin = "admin".equals(username) || "sysadmin".equals(username);
+
+			// 判断是否是辅导员
+			boolean isCounselor = false;
+			List<SysUserRole> userRoleList = sysUserRoleService
+					.list(new LambdaQueryWrapper<SysUserRole>().eq(SysUserRole::getUserId, loginUser.getId()));
+			if (!userRoleList.isEmpty()) {
+				List<String> roleIds = userRoleList.stream().map(SysUserRole::getRoleId).collect(Collectors.toList());
+				List<SysRole> roleList = sysRoleService.listByIds(roleIds);
+				for (SysRole role : roleList) {
+					if ("counselor".equals(role.getRoleCode())) {
+						isCounselor = true;
+						break;
+					}
+				}
+			}
+
+			// 辅导员逻辑：检查学生的班级是否属于该辅导员管理
+			if (isCounselor && !isAdmin) {
+				// 步骤1：通过sys_user.id查询辅导员信息
+				QueryWrapper<TCounselor> counselorWrapper = new QueryWrapper<>();
+				counselorWrapper.eq("user_id", loginUser.getId());
+				TCounselor counselor = tCounselorService.getOne(counselorWrapper);
+				if (counselor != null) {
+					// 步骤2：查询该辅导员管理的所有班级
+					QueryWrapper<TClass> classWrapper = new QueryWrapper<>();
+					classWrapper.eq("counselor_id", counselor.getId());
+					List<TClass> classList = tClassService.list(classWrapper);
+					if (!classList.isEmpty()) {
+						// 提取班级ID列表
+						List<String> classIds = classList.stream().map(TClass::getId).collect(Collectors.toList());
+						// 步骤3：检查学生的班级是否在该辅导员管理的班级列表中
+						if (!classIds.contains(tStudent.getClassId())) {
+							return Result.error("您只能添加自己管理班级的学生！");
+						}
+					}
+				}
 			}
 
 			// 1. 先创建系统用户（sys_user）的登录账号
@@ -455,6 +581,47 @@ public class TStudentController extends JeecgController<TStudent, ITStudentServi
 				return Result.error("请选择要导入的Excel文件！");
 			}
 
+			// 获取当前登录用户
+			LoginUser loginUser = (LoginUser) SecurityUtils.getSubject().getPrincipal();
+			String username = loginUser.getUsername();
+
+			// 判断是否是管理员
+			boolean isAdmin = "admin".equals(username) || "sysadmin".equals(username);
+
+			// 判断是否是辅导员
+			boolean isCounselor = false;
+			List<SysUserRole> userRoleList = sysUserRoleService
+					.list(new LambdaQueryWrapper<SysUserRole>().eq(SysUserRole::getUserId, loginUser.getId()));
+			if (!userRoleList.isEmpty()) {
+				List<String> roleIds = userRoleList.stream().map(SysUserRole::getRoleId).collect(Collectors.toList());
+				List<SysRole> roleList = sysRoleService.listByIds(roleIds);
+				for (SysRole role : roleList) {
+					if ("counselor".equals(role.getRoleCode())) {
+						isCounselor = true;
+						break;
+					}
+				}
+			}
+
+			// 辅导员逻辑：获取管理的班级列表
+			List<String> counselorClassIds = new ArrayList<>();
+			if (isCounselor && !isAdmin) {
+				// 步骤1：通过sys_user.id查询辅导员信息
+				QueryWrapper<TCounselor> counselorWrapper = new QueryWrapper<>();
+				counselorWrapper.eq("user_id", loginUser.getId());
+				TCounselor counselor = tCounselorService.getOne(counselorWrapper);
+				if (counselor != null) {
+					// 步骤2：查询该辅导员管理的所有班级
+					QueryWrapper<TClass> classWrapper = new QueryWrapper<>();
+					classWrapper.eq("counselor_id", counselor.getId());
+					List<TClass> classList = tClassService.list(classWrapper);
+					if (!classList.isEmpty()) {
+						// 提取班级ID列表
+						counselorClassIds = classList.stream().map(TClass::getId).collect(Collectors.toList());
+					}
+				}
+			}
+
 			// 2. 基础导入参数配置（不依赖实体类注解校验）
 			ImportParams importParams = new ImportParams();
 			importParams.setTitleRows(2); // 标题行数量（根据你的Excel模板调整，比如1行标题）
@@ -501,6 +668,14 @@ public class TStudentController extends JeecgController<TStudent, ITStudentServi
 						continue;
 					}
 					student.setStudentName(studentName.trim()); // 去除姓名空格
+
+					// 5.3 辅导员权限校验：检查学生的班级是否属于该辅导员管理
+					if (isCounselor && !isAdmin) {
+						if (!counselorClassIds.contains(student.getClassId())) {
+							failMsgList.add("第" + totalRow + "行：学号【" + studentId + "】不属于您管理的班级，跳过导入");
+							continue;
+						}
+					}
 
 					// 6. 校验学号是否已存在（避免重复创建账号）
 					SysUser existUser = sysUserService.getOne(new LambdaQueryWrapper<SysUser>()

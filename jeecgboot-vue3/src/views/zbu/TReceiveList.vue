@@ -28,7 +28,11 @@
 
         <!-- 管理员/辅导员端：保留原有新增/导出/导入/批量操作 -->
         <template v-if="isAdmin || isCounselor">
-          <a-button type="primary" v-auth="'zbu:t_receive:add'" @click="handleAdd" preIcon="ant-design:plus-outlined"> 新增</a-button>
+          <template v-if="isAdmin">
+            <a-button type="primary" v-auth="'zbu:t_receive:add'" @click="handleAdd" preIcon="ant-design:plus-outlined"> 新增</a-button>
+          </template>
+
+
           <a-button  type="primary" v-auth="'zbu:t_receive:exportXls'" preIcon="ant-design:export-outlined" @click="onExportXls"> 导出</a-button>
           <!--          <j-upload-button type="primary" v-auth="'zbu:t_receive:importExcel'" preIcon="ant-design:import-outlined" @click="onImportXls">导入</j-upload-button>-->
           <a-dropdown v-if="selectedRowKeys.length > 0">
@@ -45,7 +49,7 @@
             </a-button>
           </a-dropdown>
         </template>
-        <super-query v-if="isAdmin || isCounselor" :config="superQueryConfig" @search="handleSuperQuery" />
+<!--        <super-query v-if="isAdmin || isCounselor" :config="superQueryConfig" @search="handleSuperQuery" />-->
       </template>
 
       <!-- 学生端不渲染操作列的模板 -->

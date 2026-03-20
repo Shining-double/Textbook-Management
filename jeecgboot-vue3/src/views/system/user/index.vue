@@ -4,11 +4,16 @@
     <BasicTable @register="registerTable" :rowSelection="rowSelection">
       <!--插槽:table标题-->
       <template #tableTitle>
-        <a-button type="primary" preIcon="ant-design:plus-outlined" @click="handleCreate"> 新增</a-button>
+        <template v-if="isAdmin">
+          <a-button type="primary" preIcon="ant-design:plus-outlined" @click="handleCreate"> 新增</a-button>
+        </template>
         <a-button type="primary" preIcon="ant-design:export-outlined" @click="onExportXls" > 导出</a-button>
         <!--        <j-upload-button type="primary" preIcon="ant-design:import-outlined" @click="onImportXls" v-auth="'system:user:import'">导入</j-upload-button>-->
-        <import-excel-progress :upload-url="getImportUrl" @success="reload"></import-excel-progress>
-        <a-button type="primary" @click="openModal(true, {})" preIcon="ant-design:hdd-outlined"> 回收站</a-button>
+<!--        <import-excel-progress :upload-url="getImportUrl" @success="reload"></import-excel-progress>-->
+        <template v-if="isAdmin">
+          <a-button type="primary" @click="openModal(true, {})" preIcon="ant-design:hdd-outlined"> 回收站</a-button>
+        </template>
+
         <a-dropdown v-if="selectedRowKeys.length > 0">
           <template #overlay>
             <a-menu>
@@ -74,6 +79,8 @@ import { useUserStore } from '/@/store/modules/user';
 
 const { createMessage, createConfirm } = useMessage();
 const { isDisabledAuth, hasPermission } = usePermission();
+
+
 
 // ========== 角色判断逻辑（参考征订表）==========
 const userStore = useUserStore();

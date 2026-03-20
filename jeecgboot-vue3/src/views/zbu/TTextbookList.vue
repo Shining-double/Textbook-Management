@@ -24,7 +24,7 @@
           </a-dropdown>
 
           <!-- 高级查询 -->
-          <super-query :config="superQueryConfig" @search="handleSuperQuery" class="ml-2 flex-1 min-w-[200px]" />
+<!--          <super-query :config="superQueryConfig" @search="handleSuperQuery" class="ml-2 flex-1 min-w-[200px]" />-->
 
           <!-- 批量修改按钮 -->
           <a-button

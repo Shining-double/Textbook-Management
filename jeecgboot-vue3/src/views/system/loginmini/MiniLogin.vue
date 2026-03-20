@@ -224,10 +224,12 @@
   const activeIndex = ref<string>('accountLogin');
   const type = ref<string>('login');
   //账号登录表单字段
+  //默认账号
+  //默认密码
   const formData = reactive<any>({
     inputCode: '',
     username: '',
-    password: '123456',
+    password: '',
     loginOrgCode: '',
   });
   //手机登录表单字段

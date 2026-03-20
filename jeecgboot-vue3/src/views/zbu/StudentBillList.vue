@@ -33,7 +33,7 @@
                 <Icon icon="mdi:chevron-down"></Icon>
               </a-button>
             </a-dropdown>
-            <super-query :config="superQueryConfig" @search="handleSuperQuery" />
+<!--            <super-query :config="superQueryConfig" @search="handleSuperQuery" />-->
           </template>
         </template>
 
