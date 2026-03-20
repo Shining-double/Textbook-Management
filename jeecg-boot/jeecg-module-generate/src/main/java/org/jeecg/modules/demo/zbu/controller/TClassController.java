@@ -1,9 +1,6 @@
 package org.jeecg.modules.demo.zbu.controller;
 
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.stream.Collectors;
 import java.io.IOException;
 import java.io.UnsupportedEncodingException;
@@ -87,6 +84,21 @@ public class TClassController extends JeecgController<TClass, ITClassService> {
 	@RequiresPermissions("zbu:t_class:add")
 	@PostMapping(value = "/add")
 	public Result<String> add(@RequestBody TClass tClass) {
+
+		// 检查班级编码是否已存在
+		QueryWrapper<TClass> codeWrapper = new QueryWrapper<>();
+		codeWrapper.eq("class_code", tClass.getClassCode());
+		if (tClassService.count(codeWrapper) > 0) {
+			return Result.error("添加失败：班级编码已存在！");
+		}
+
+		// 检查班级名称是否已存在
+		QueryWrapper<TClass> nameWrapper = new QueryWrapper<>();
+		nameWrapper.eq("class_name", tClass.getClassName());
+		if (tClassService.count(nameWrapper) > 0) {
+			return Result.error("添加失败：班级名称已存在！");
+		}
+
 		tClassService.save(tClass);
 
 		return Result.OK("添加成功！");
@@ -176,7 +188,120 @@ public class TClassController extends JeecgController<TClass, ITClassService> {
     @RequiresPermissions("zbu:t_class:importExcel")
     @RequestMapping(value = "/importExcel", method = RequestMethod.POST)
     public Result<?> importExcel(HttpServletRequest request, HttpServletResponse response) {
-        return super.importExcel(request, response, TClass.class);
+		try {
+			// 1. 获取上传的Excel文件
+			MultipartHttpServletRequest multipartRequest = (MultipartHttpServletRequest) request;
+			Map<String, MultipartFile> fileMap = multipartRequest.getFileMap();
+			if (fileMap.isEmpty()) {
+				return Result.error("请选择要导入的Excel文件！");
+			}
+
+			// 2. 基础导入参数配置
+			ImportParams importParams = new ImportParams();
+			importParams.setTitleRows(2); // 标题行数量
+			importParams.setHeadRows(1); // 表头行数量
+			importParams.setNeedSave(true);
+
+			// 存储有效数据和失败信息
+			List<TClass> validClassList = new ArrayList<>();
+			List<String> failMsgList = new ArrayList<>();
+			int totalRow = 0;
+
+			// 3. 遍历解析Excel文件
+			for (Map.Entry<String, MultipartFile> entry : fileMap.entrySet()) {
+				MultipartFile file = entry.getValue();
+				if (file.isEmpty()) {
+					continue;
+				}
+
+				// 4. 解析Excel为班级列表
+				List<TClass> tempList = ExcelImportUtil.importExcel(
+						file.getInputStream(),
+						TClass.class,
+						importParams);
+
+				// 5. 逐行校验+过滤
+				for (int i = 0; i < tempList.size(); i++) {
+					totalRow = i + 2; // Excel行号（标题+表头后从第2行开始）
+					TClass clazz = tempList.get(i);
+
+					// 5.1 班级编码空值校验
+					String classCode = clazz.getClassCode();
+					if (oConvertUtils.isEmpty(classCode) || classCode.trim().isEmpty()) {
+						failMsgList.add("第" + totalRow + "行：班级编码为空，跳过导入");
+						continue;
+					}
+					clazz.setClassCode(classCode.trim());
+
+					// 5.2 班级名称空值校验
+					String className = clazz.getClassName();
+					if (oConvertUtils.isEmpty(className) || className.trim().isEmpty()) {
+						failMsgList.add("第" + totalRow + "行：班级名称为空（编码：" + classCode + "），跳过导入");
+						continue;
+					}
+					clazz.setClassName(className.trim());
+
+					// 5.3 所属专业空值校验
+					if (oConvertUtils.isEmpty(clazz.getMajorId())) {
+						failMsgList.add("第" + totalRow + "行：所属专业为空（编码：" + classCode + "），跳过导入");
+						continue;
+					}
+
+					// 5.4 辅导员空值校验
+					if (oConvertUtils.isEmpty(clazz.getCounselorId())) {
+						failMsgList.add("第" + totalRow + "行：辅导员为空（编码：" + classCode + "），跳过导入");
+						continue;
+					}
+
+					// 6. 检查班级编码是否已存在
+					QueryWrapper<TClass> codeWrapper = new QueryWrapper<>();
+					codeWrapper.eq("class_code", clazz.getClassCode());
+					if (tClassService.count(codeWrapper) > 0) {
+						failMsgList.add("第" + totalRow + "行：班级编码【" + classCode + "】已存在，跳过导入");
+						continue;
+					}
+
+					// 7. 检查班级名称是否已存在
+					QueryWrapper<TClass> nameWrapper = new QueryWrapper<>();
+					nameWrapper.eq("class_name", clazz.getClassName());
+					if (tClassService.count(nameWrapper) > 0) {
+						failMsgList.add("第" + totalRow + "行：班级名称【" + className + "】已存在，跳过导入");
+						continue;
+					}
+
+					// 8. 加入有效列表
+					clazz.setCreateTime(new Date());
+					validClassList.add(clazz);
+				}
+			}
+
+			// 9. 批量保存有效数据
+			if (!validClassList.isEmpty()) {
+				tClassService.saveBatch(validClassList);
+			}
+
+			// 10. 构建返回结果
+			StringBuilder result = new StringBuilder();
+			result.append("导入完成！成功导入【").append(validClassList.size()).append("】条有效数据");
+			if (!failMsgList.isEmpty()) {
+				result.append("；失败【").append(failMsgList.size()).append("】条数据，原因：");
+				List<String> showFailMsg = failMsgList.size() > 10 ? failMsgList.subList(0, 10) : failMsgList;
+				result.append(String.join("；", showFailMsg));
+				if (failMsgList.size() > 10) {
+					result.append("；还有").append(failMsgList.size() - 10).append("条失败信息未展示");
+				}
+			}
+
+			if (validClassList.isEmpty()) {
+				return Result.error(result.toString());
+			} else {
+				return Result.OK(result.toString());
+			}
+
+		} catch (Exception e) {
+			log.error("Excel导入班级数据失败", e);
+			return Result.error("导入失败：" + e.getMessage());
+		}
     }
 
 }

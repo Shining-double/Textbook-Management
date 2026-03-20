@@ -111,8 +111,24 @@ public class TCounselorController extends JeecgController<TCounselor, ITCounselo
 	public Result<String> add(@RequestBody TCounselor tCounselor) {
 		try {
 			// 1. 校验核心字段
-			if (oConvertUtils.isEmpty(tCounselor.getCounselorId()) || oConvertUtils.isEmpty(tCounselor.getCounselorName())) {
+			if (oConvertUtils.isEmpty(tCounselor.getCounselorId())
+					|| oConvertUtils.isEmpty(tCounselor.getCounselorName())) {
 				return Result.error("辅导员工号和姓名不能为空！");
+			}
+			String counselorId = tCounselor.getCounselorId().trim();
+
+			// 2. 检查工号是否已存在于辅导员表
+			QueryWrapper<TCounselor> counselorWrapper = new QueryWrapper<>();
+			counselorWrapper.eq("counselor_id", counselorId);
+			if (tCounselorService.count(counselorWrapper) > 0) {
+				return Result.error("添加失败：工号已存在！");
+			}
+
+			// 3. 检查工号是否已存在于系统用户表（因为工号用作用户名）
+			QueryWrapper<SysUser> userWrapper = new QueryWrapper<>();
+			userWrapper.eq("username", counselorId);
+			if (sysUserService.count(userWrapper) > 0) {
+				return Result.error("添加失败：工号已存在系统账号！");
 			}
 
 			// 2. 创建系统用户（sys_user）的登录账号
@@ -123,7 +139,7 @@ public class TCounselorController extends JeecgController<TCounselor, ITCounselo
 			sysUser.setRealname(tCounselor.getCounselorName().trim());
 
 			// 3. Jeecg官方逻辑：生成8位随机salt + 原生加密
-			String plainPwd = "Zbu1"; // 明文密码写死Zbu1
+			String plainPwd = counselorId + "Zbu1"; // 明文密码写死Zbu1
 			String salt = oConvertUtils.randomGen(8); // 生成8位随机salt
 			sysUser.setSalt(salt); // 设置随机salt到用户表
 			// 用Jeecg原生加密：encrypt(用户名, 明文密码, 随机salt)
@@ -448,14 +464,21 @@ public class TCounselorController extends JeecgController<TCounselor, ITCounselo
 					}
 					counselor.setCounselorName(counselorName.trim());
 
-					// 6. 校验工号是否已存在
+
+					// 6. 校验工号是否已存在于辅导员表
+					QueryWrapper<TCounselor> counselorWrapper = new QueryWrapper<>();
+					counselorWrapper.eq("counselor_id", counselor.getCounselorId());
+					if (tCounselorService.count(counselorWrapper) > 0) {
+						failMsgList.add("第" + totalRow + "行：工号【" + counselorId + "】已存在，跳过导入");
+						continue;
+					}
+
+					// 7. 校验工号是否已存在于系统用户表（因为工号用作用户名）
 					SysUser existUser = sysUserService.getOne(new LambdaQueryWrapper<SysUser>()
 							.eq(SysUser::getUsername, counselor.getCounselorId())
 							.eq(SysUser::getDelFlag, CommonConstant.DEL_FLAG_0));
 					if (existUser != null) {
-						failMsgList.add("第" + totalRow + "行：工号【" + counselorId + "】已存在系统账号，关联已有账号");
-						counselor.setUserId(existUser.getId());
-						validCounselorList.add(counselor);
+						failMsgList.add("第" + totalRow + "行：工号【" + counselorId + "】已存在系统账号，跳过导入");
 						continue;
 					}
 
@@ -472,7 +495,7 @@ public class TCounselorController extends JeecgController<TCounselor, ITCounselo
 					sysUser.setRealname(counselor.getCounselorName());
 					// 密码加密
 					String salt = oConvertUtils.randomGen(8);
-					String plainPwd = "Zbu1";
+					String plainPwd = counselor.getCounselorId()+"Zbu1";
 					String encryptedPwd = PasswordUtil.encrypt(sysUser.getUsername(), plainPwd, salt);
 					sysUser.setSalt(salt);
 					sysUser.setPassword(encryptedPwd);

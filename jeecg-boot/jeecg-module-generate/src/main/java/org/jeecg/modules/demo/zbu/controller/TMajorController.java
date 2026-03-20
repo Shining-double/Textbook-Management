@@ -1,9 +1,6 @@
 package org.jeecg.modules.demo.zbu.controller;
 
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.stream.Collectors;
 import java.io.IOException;
 import java.io.UnsupportedEncodingException;
@@ -87,6 +84,19 @@ public class TMajorController extends JeecgController<TMajor, ITMajorService> {
 	@RequiresPermissions("zbu:t_major:add")
 	@PostMapping(value = "/add")
 	public Result<String> add(@RequestBody TMajor tMajor) {
+		// 检查专业编码是否已存在
+		QueryWrapper<TMajor> codeWrapper = new QueryWrapper<>();
+		codeWrapper.eq("major_code", tMajor.getMajorCode());
+		if (tMajorService.count(codeWrapper) > 0) {
+			return Result.error("添加失败：专业编码已存在！");
+		}
+
+		// 检查专业名称是否已存在
+		QueryWrapper<TMajor> nameWrapper = new QueryWrapper<>();
+		nameWrapper.eq("major_name", tMajor.getMajorName());
+		if (tMajorService.count(nameWrapper) > 0) {
+			return Result.error("添加失败：专业名称已存在！");
+		}
 		tMajorService.save(tMajor);
 
 		return Result.OK("添加成功！");
@@ -176,7 +186,115 @@ public class TMajorController extends JeecgController<TMajor, ITMajorService> {
     @RequiresPermissions("zbu:t_major:importExcel")
     @RequestMapping(value = "/importExcel", method = RequestMethod.POST)
     public Result<?> importExcel(HttpServletRequest request, HttpServletResponse response) {
-        return super.importExcel(request, response, TMajor.class);
+		try {
+			// 1. 获取上传的Excel文件
+			MultipartHttpServletRequest multipartRequest = (MultipartHttpServletRequest) request;
+			Map<String, MultipartFile> fileMap = multipartRequest.getFileMap();
+			if (fileMap.isEmpty()) {
+				return Result.error("请选择要导入的Excel文件！");
+			}
+
+			// 2. 基础导入参数配置
+			ImportParams importParams = new ImportParams();
+			importParams.setTitleRows(2); // 标题行数量
+			importParams.setHeadRows(1); // 表头行数量
+			importParams.setNeedSave(true);
+
+			// 存储有效数据和失败信息
+			List<TMajor> validMajorList = new ArrayList<>();
+			List<String> failMsgList = new ArrayList<>();
+			int totalRow = 0;
+
+			// 3. 遍历解析Excel文件
+			for (Map.Entry<String, MultipartFile> entry : fileMap.entrySet()) {
+				MultipartFile file = entry.getValue();
+				if (file.isEmpty()) {
+					continue;
+				}
+
+				// 4. 解析Excel为专业列表
+				List<TMajor> tempList = ExcelImportUtil.importExcel(
+						file.getInputStream(),
+						TMajor.class,
+						importParams);
+
+				// 5. 逐行校验+过滤
+				for (int i = 0; i < tempList.size(); i++) {
+					totalRow = i + 2; // Excel行号（标题+表头后从第2行开始）
+					TMajor major = tempList.get(i);
+
+					// 5.1 专业编码空值校验
+					String majorCode = major.getMajorCode();
+					if (oConvertUtils.isEmpty(majorCode) || majorCode.trim().isEmpty()) {
+						failMsgList.add("第" + totalRow + "行：专业编码为空，跳过导入");
+						continue;
+					}
+					major.setMajorCode(majorCode.trim());
+
+					// 5.2 专业名称空值校验
+					String majorName = major.getMajorName();
+					if (oConvertUtils.isEmpty(majorName) || majorName.trim().isEmpty()) {
+						failMsgList.add("第" + totalRow + "行：专业名称为空（编码：" + majorCode + "），跳过导入");
+						continue;
+					}
+					major.setMajorName(majorName.trim());
+
+					// 5.3 所属学院空值校验
+					if (oConvertUtils.isEmpty(major.getCollegeId())) {
+						failMsgList.add("第" + totalRow + "行：所属学院为空（编码：" + majorCode + "），跳过导入");
+						continue;
+					}
+
+					// 6. 检查专业编码是否已存在
+					QueryWrapper<TMajor> codeWrapper = new QueryWrapper<>();
+					codeWrapper.eq("major_code", major.getMajorCode());
+					if (tMajorService.count(codeWrapper) > 0) {
+						failMsgList.add("第" + totalRow + "行：专业编码【" + majorCode + "】已存在，跳过导入");
+						continue;
+					}
+
+					// 7. 检查专业名称是否已存在
+					QueryWrapper<TMajor> nameWrapper = new QueryWrapper<>();
+					nameWrapper.eq("major_name", major.getMajorName());
+					if (tMajorService.count(nameWrapper) > 0) {
+						failMsgList.add("第" + totalRow + "行：专业名称【" + majorName + "】已存在，跳过导入");
+						continue;
+					}
+
+					// 8. 加入有效列表
+					major.setCreateTime(new Date());
+					validMajorList.add(major);
+				}
+			}
+
+			// 9. 批量保存有效数据
+			if (!validMajorList.isEmpty()) {
+				tMajorService.saveBatch(validMajorList);
+			}
+
+			// 10. 构建返回结果
+			StringBuilder result = new StringBuilder();
+			result.append("导入完成！成功导入【").append(validMajorList.size()).append("】条有效数据");
+			if (!failMsgList.isEmpty()) {
+				result.append("；失败【").append(failMsgList.size()).append("】条数据，原因：");
+				List<String> showFailMsg = failMsgList.size() > 10 ? failMsgList.subList(0, 10) : failMsgList;
+				result.append(String.join("；", showFailMsg));
+				if (failMsgList.size() > 10) {
+					result.append("；还有").append(failMsgList.size() - 10).append("条失败信息未展示");
+				}
+			}
+
+			if (validMajorList.isEmpty()) {
+				return Result.error(result.toString());
+			} else {
+				return Result.OK(result.toString());
+			}
+
+		} catch (Exception e) {
+			log.error("Excel导入专业数据失败", e);
+			return Result.error("导入失败：" + e.getMessage());
+		}
+
     }
 
 }

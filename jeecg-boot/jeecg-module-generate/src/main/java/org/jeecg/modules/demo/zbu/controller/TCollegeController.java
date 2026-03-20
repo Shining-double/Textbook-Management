@@ -1,9 +1,6 @@
 package org.jeecg.modules.demo.zbu.controller;
 
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.stream.Collectors;
 import java.io.IOException;
 import java.io.UnsupportedEncodingException;
@@ -87,6 +84,20 @@ public class TCollegeController extends JeecgController<TCollege, ITCollegeServi
 	@RequiresPermissions("zbu:t_college:add")
 	@PostMapping(value = "/add")
 	public Result<String> add(@RequestBody TCollege tCollege) {
+		// 检查学院编码是否已存在
+		QueryWrapper<TCollege> codeWrapper = new QueryWrapper<>();
+		codeWrapper.eq("college_code", tCollege.getCollegeCode());
+		if (tCollegeService.count(codeWrapper) > 0) {
+			return Result.error("添加失败：学院编码已存在！");
+		}
+
+		// 检查学院名称是否已存在
+		QueryWrapper<TCollege> nameWrapper = new QueryWrapper<>();
+		nameWrapper.eq("college_name", tCollege.getCollegeName());
+		if (tCollegeService.count(nameWrapper) > 0) {
+			return Result.error("添加失败：学院名称已存在！");
+		}
+
 		tCollegeService.save(tCollege);
 
 		return Result.OK("添加成功！");
@@ -176,7 +187,108 @@ public class TCollegeController extends JeecgController<TCollege, ITCollegeServi
     @RequiresPermissions("zbu:t_college:importExcel")
     @RequestMapping(value = "/importExcel", method = RequestMethod.POST)
     public Result<?> importExcel(HttpServletRequest request, HttpServletResponse response) {
-        return super.importExcel(request, response, TCollege.class);
+		try {
+			// 1. 获取上传的Excel文件
+			MultipartHttpServletRequest multipartRequest = (MultipartHttpServletRequest) request;
+			Map<String, MultipartFile> fileMap = multipartRequest.getFileMap();
+			if (fileMap.isEmpty()) {
+				return Result.error("请选择要导入的Excel文件！");
+			}
+
+			// 2. 基础导入参数配置
+			ImportParams importParams = new ImportParams();
+			importParams.setTitleRows(2); // 标题行数量
+			importParams.setHeadRows(1); // 表头行数量
+			importParams.setNeedSave(true);
+
+			// 存储有效数据和失败信息
+			List<TCollege> validCollegeList = new ArrayList<>();
+			List<String> failMsgList = new ArrayList<>();
+			int totalRow = 0;
+
+			// 3. 遍历解析Excel文件
+			for (Map.Entry<String, MultipartFile> entry : fileMap.entrySet()) {
+				MultipartFile file = entry.getValue();
+				if (file.isEmpty()) {
+					continue;
+				}
+
+				// 4. 解析Excel为学院列表
+				List<TCollege> tempList = ExcelImportUtil.importExcel(
+						file.getInputStream(),
+						TCollege.class,
+						importParams);
+
+				// 5. 逐行校验+过滤
+				for (int i = 0; i < tempList.size(); i++) {
+					totalRow = i + 2; // Excel行号（标题+表头后从第2行开始）
+					TCollege college = tempList.get(i);
+
+					// 5.1 学院编码空值校验
+					String collegeCode = college.getCollegeCode();
+					if (oConvertUtils.isEmpty(collegeCode) || collegeCode.trim().isEmpty()) {
+						failMsgList.add("第" + totalRow + "行：学院编码为空，跳过导入");
+						continue;
+					}
+					college.setCollegeCode(collegeCode.trim());
+
+					// 5.2 学院名称空值校验
+					String collegeName = college.getCollegeName();
+					if (oConvertUtils.isEmpty(collegeName) || collegeName.trim().isEmpty()) {
+						failMsgList.add("第" + totalRow + "行：学院名称为空（编码：" + collegeCode + "），跳过导入");
+						continue;
+					}
+					college.setCollegeName(collegeName.trim());
+
+					// 6. 检查学院编码是否已存在
+					QueryWrapper<TCollege> codeWrapper = new QueryWrapper<>();
+					codeWrapper.eq("college_code", college.getCollegeCode());
+					if (tCollegeService.count(codeWrapper) > 0) {
+						failMsgList.add("第" + totalRow + "行：学院编码【" + collegeCode + "】已存在，跳过导入");
+						continue;
+					}
+
+					// 7. 检查学院名称是否已存在
+					QueryWrapper<TCollege> nameWrapper = new QueryWrapper<>();
+					nameWrapper.eq("college_name", college.getCollegeName());
+					if (tCollegeService.count(nameWrapper) > 0) {
+						failMsgList.add("第" + totalRow + "行：学院名称【" + collegeName + "】已存在，跳过导入");
+						continue;
+					}
+
+					// 8. 加入有效列表
+					college.setCreateTime(new Date());
+					validCollegeList.add(college);
+				}
+			}
+
+			// 9. 批量保存有效数据
+			if (!validCollegeList.isEmpty()) {
+				tCollegeService.saveBatch(validCollegeList);
+			}
+
+			// 10. 构建返回结果
+			StringBuilder result = new StringBuilder();
+			result.append("导入完成！成功导入【").append(validCollegeList.size()).append("】条有效数据");
+			if (!failMsgList.isEmpty()) {
+				result.append("；失败【").append(failMsgList.size()).append("】条数据，原因：");
+				List<String> showFailMsg = failMsgList.size() > 10 ? failMsgList.subList(0, 10) : failMsgList;
+				result.append(String.join("；", showFailMsg));
+				if (failMsgList.size() > 10) {
+					result.append("；还有").append(failMsgList.size() - 10).append("条失败信息未展示");
+				}
+			}
+
+			if (validCollegeList.isEmpty()) {
+				return Result.error(result.toString());
+			} else {
+				return Result.OK(result.toString());
+			}
+
+		} catch (Exception e) {
+			log.error("Excel导入学院数据失败", e);
+			return Result.error("导入失败：" + e.getMessage());
+		}
     }
 
 }

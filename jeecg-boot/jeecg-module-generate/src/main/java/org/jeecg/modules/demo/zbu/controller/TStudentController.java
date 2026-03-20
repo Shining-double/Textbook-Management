@@ -229,6 +229,22 @@ public class TStudentController extends JeecgController<TStudent, ITStudentServi
 				return Result.error("学生学号不能为空！");
 			}
 
+			studentNo = studentNo.trim();
+
+			// 检查学号是否已存在于学生表
+			QueryWrapper<TStudent> studentWrapper = new QueryWrapper<>();
+			studentWrapper.eq("student_id", studentNo);
+			if (tStudentService.count(studentWrapper) > 0) {
+				return Result.error("添加失败：学号已存在！");
+			}
+
+			// 检查学号是否已存在于系统用户表（因为学号用作用户名）
+			QueryWrapper<SysUser> userWrapper = new QueryWrapper<>();
+			userWrapper.eq("username", studentNo);
+			if (sysUserService.count(userWrapper) > 0) {
+				return Result.error("添加失败：学号已存在系统账号！");
+			}
+
 			// 获取当前登录用户
 			LoginUser loginUser = (LoginUser) SecurityUtils.getSubject().getPrincipal();
 			String username = loginUser.getUsername();
@@ -275,12 +291,12 @@ public class TStudentController extends JeecgController<TStudent, ITStudentServi
 
 			// 1. 先创建系统用户（sys_user）的登录账号
 			SysUser sysUser = new SysUser();
-			sysUser.setUsername(studentNo.trim());
+			sysUser.setUsername(studentNo);
 			// 姓名去空格
 			sysUser.setRealname(tStudent.getStudentName() != null ? tStudent.getStudentName().trim() : "");
 
 			// 2. Jeecg官方逻辑：生成8位随机salt + 原生加密（核心修正）
-			String plainPwd = "Zbu1"; // 明文密码写死Zbu1
+			String plainPwd = studentNo + "Zbu1"; // 明文密码写死Zbu1
 			String salt = oConvertUtils.randomGen(8); // 生成8位随机salt（和admin/jeecg账号逻辑一致）
 			sysUser.setSalt(salt); // 设置随机salt到用户表
 			// 用Jeecg原生加密：encrypt(用户名, 明文密码, 随机salt)，和登录验证逻辑完全匹配
@@ -677,14 +693,21 @@ public class TStudentController extends JeecgController<TStudent, ITStudentServi
 						}
 					}
 
-					// 6. 校验学号是否已存在（避免重复创建账号）
+
+					// 6. 校验学号是否已存在于学生表
+					QueryWrapper<TStudent> studentWrapper = new QueryWrapper<>();
+					studentWrapper.eq("student_id", student.getStudentId());
+					if (tStudentService.count(studentWrapper) > 0) {
+						failMsgList.add("第" + totalRow + "行：学号【" + studentId + "】已存在，跳过导入");
+						continue;
+					}
+
+					// 7. 校验学号是否已存在于系统用户表（因为学号用作用户名）
 					SysUser existUser = sysUserService.getOne(new LambdaQueryWrapper<SysUser>()
 							.eq(SysUser::getUsername, student.getStudentId())
 							.eq(SysUser::getDelFlag, CommonConstant.DEL_FLAG_0));
 					if (existUser != null) {
-						failMsgList.add("第" + totalRow + "行：学号【" + studentId + "】已存在系统账号，关联已有账号");
-						student.setUserId(existUser.getId());
-						validStudentList.add(student);
+						failMsgList.add("第" + totalRow + "行：学号【" + studentId + "】已存在系统账号，跳过导入");
 						continue;
 					}
 
@@ -701,7 +724,7 @@ public class TStudentController extends JeecgController<TStudent, ITStudentServi
 					sysUser.setRealname(student.getStudentName()); // 姓名作为真实名
 					// 密码加密（和新增接口一致）
 					String salt = oConvertUtils.randomGen(8);
-					String plainPwd = "Zbu1";
+					String plainPwd = student.getStudentId() + "Zbu1";
 					String encryptedPwd = PasswordUtil.encrypt(sysUser.getUsername(), plainPwd, salt);
 					sysUser.setSalt(salt);
 					sysUser.setPassword(encryptedPwd);
