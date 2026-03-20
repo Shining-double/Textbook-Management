@@ -161,7 +161,7 @@ public class TStudentController extends JeecgController<TStudent, ITStudentServi
 
 		// 移除majorId参数，避免QueryGenerator创建错误的查询条件
 		Map<String, String[]> paramMap = new HashMap<>(req.getParameterMap());
-		String[] majorIdParams = paramMap.remove("majorId");
+		String[] majorNameParams = paramMap.remove("majorName");
 
 		QueryWrapper<TStudent> queryWrapper = QueryGenerator.initQueryWrapper(tStudent, paramMap,
 				customeRuleMap);
@@ -175,8 +175,8 @@ public class TStudentController extends JeecgController<TStudent, ITStudentServi
 		}
 
 		// 专业模糊查询
-		if (majorIdParams != null && majorIdParams.length > 0) {
-			String majorName = majorIdParams[0];
+		if (majorNameParams != null && majorNameParams.length > 0) {
+			String majorName = majorNameParams[0];
 			if (oConvertUtils.isNotEmpty(majorName)) {
 				queryWrapper.inSql("major_id",
 						"SELECT id FROM t_major WHERE major_name LIKE CONCAT('%', '" + majorName + "', '%')");
@@ -280,7 +280,7 @@ public class TStudentController extends JeecgController<TStudent, ITStudentServi
 			sysUser.setRealname(tStudent.getStudentName() != null ? tStudent.getStudentName().trim() : "");
 
 			// 2. Jeecg官方逻辑：生成8位随机salt + 原生加密（核心修正）
-			String plainPwd = "123456"; // 明文密码写死123456
+			String plainPwd = "Zbu1"; // 明文密码写死Zbu1
 			String salt = oConvertUtils.randomGen(8); // 生成8位随机salt（和admin/jeecg账号逻辑一致）
 			sysUser.setSalt(salt); // 设置随机salt到用户表
 			// 用Jeecg原生加密：encrypt(用户名, 明文密码, 随机salt)，和登录验证逻辑完全匹配
@@ -701,7 +701,7 @@ public class TStudentController extends JeecgController<TStudent, ITStudentServi
 					sysUser.setRealname(student.getStudentName()); // 姓名作为真实名
 					// 密码加密（和新增接口一致）
 					String salt = oConvertUtils.randomGen(8);
-					String plainPwd = "123456";
+					String plainPwd = "Zbu1";
 					String encryptedPwd = PasswordUtil.encrypt(sysUser.getUsername(), plainPwd, salt);
 					sysUser.setSalt(salt);
 					sysUser.setPassword(encryptedPwd);

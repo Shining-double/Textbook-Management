@@ -56,7 +56,7 @@ export const searchFormSchema: FormSchema[] = [
   },
 	{
       label: "专业",
-      field: 'majorId',
+      field: 'majorName',
       component: 'Input',
       //colProps: {span: 6},
  	},

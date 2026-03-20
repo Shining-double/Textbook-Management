@@ -123,7 +123,7 @@ public class TCounselorController extends JeecgController<TCounselor, ITCounselo
 			sysUser.setRealname(tCounselor.getCounselorName().trim());
 
 			// 3. Jeecg官方逻辑：生成8位随机salt + 原生加密
-			String plainPwd = "123456"; // 明文密码写死123456
+			String plainPwd = "Zbu1"; // 明文密码写死Zbu1
 			String salt = oConvertUtils.randomGen(8); // 生成8位随机salt
 			sysUser.setSalt(salt); // 设置随机salt到用户表
 			// 用Jeecg原生加密：encrypt(用户名, 明文密码, 随机salt)
@@ -472,7 +472,7 @@ public class TCounselorController extends JeecgController<TCounselor, ITCounselo
 					sysUser.setRealname(counselor.getCounselorName());
 					// 密码加密
 					String salt = oConvertUtils.randomGen(8);
-					String plainPwd = "123456";
+					String plainPwd = "Zbu1";
 					String encryptedPwd = PasswordUtil.encrypt(sysUser.getUsername(), plainPwd, salt);
 					sysUser.setSalt(salt);
 					sysUser.setPassword(encryptedPwd);

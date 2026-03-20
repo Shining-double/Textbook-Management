@@ -381,6 +381,7 @@ public class TSubscriptionController extends JeecgController<TSubscription, ITSu
 			 Subject subject = SecurityUtils.getSubject();
 			 LoginUser loginUser = (LoginUser) subject.getPrincipal();
 			 boolean isAdmin = false;
+			 boolean isCounselor = false;
 			 String roleCodeStr = loginUser.getRoleCode();
 			 if (roleCodeStr != null && !roleCodeStr.isEmpty()) {
 				 String[] roleCodes = roleCodeStr.split(",");
@@ -389,6 +390,9 @@ public class TSubscriptionController extends JeecgController<TSubscription, ITSu
 						 isAdmin = true;
 						 break;
 					 }
+					 if ("counselor".equals(code.trim())) {
+						 isCounselor = true;
+					 }
 				 }
 			 }
 			 // 管理员用户名兜底判断
@@ -396,15 +400,60 @@ public class TSubscriptionController extends JeecgController<TSubscription, ITSu
 				 isAdmin = true;
 			 }
 
-			 // 4. 非管理员：校验只能修改自己的记录
+			 // 4. 权限校验
 			 if (!isAdmin) {
-				 QueryWrapper<TSubscription> wrapper = new QueryWrapper<>();
-				 wrapper.in("id", ids)
-						 .ne("student_id", studentId);
-				 List<TSubscription> noAuthRecords = tSubscriptionService.list(wrapper);
-				 if (!noAuthRecords.isEmpty()) {
-					 log.warn("学生{}尝试修改他人征订记录，非法ID: {}", studentId, noAuthRecords.stream().map(TSubscription::getId).collect(Collectors.joining(",")));
-					 return Result.error("你只能修改自己的征订记录，无法操作他人记录！");
+				 if (isCounselor) {
+					 // 辅导员：可以修改自己管理的班级下的学生的记录
+					 // 步骤1：通过sys_user.id查询辅导员信息
+					 QueryWrapper<TCounselor> counselorWrapper = new QueryWrapper<>();
+					 counselorWrapper.eq("user_id", loginUser.getId());
+					 TCounselor counselor = tCounselorService.getOne(counselorWrapper);
+					 if (counselor == null) {
+						 log.warn("当前登录用户未关联辅导员信息，用户ID: {}", loginUser.getId());
+						 return Result.error("当前登录用户未关联辅导员信息");
+					 }
+
+					 // 步骤2：查询该辅导员管理的所有班级
+					 QueryWrapper<TClass> classWrapper = new QueryWrapper<>();
+					 classWrapper.eq("counselor_id", counselor.getId());
+					 List<TClass> classList = tClassService.list(classWrapper);
+					 if (classList.isEmpty()) {
+						 log.info("辅导员{}暂无管理的班级，无征订记录", counselor.getCounselorName());
+						 return Result.error("你暂无管理的班级，无征订记录");
+					 }
+					 // 提取班级ID列表
+					 List<String> classIds = classList.stream().map(TClass::getId).collect(Collectors.toList());
+
+					 // 步骤3：查询这些班级下的所有学生
+					 QueryWrapper<TStudent> studentWrapper = new QueryWrapper<>();
+					 studentWrapper.in("class_id", classIds);
+					 List<TStudent> studentList = tStudentService.list(studentWrapper);
+					 if (studentList.isEmpty()) {
+						 log.info("辅导员{}管理的班级暂无学生，无征订记录", counselor.getCounselorName());
+						 return Result.error("你管理的班级暂无学生，无征订记录");
+					 }
+					 // 提取学生ID列表
+					 List<String> counselorStudentIds = studentList.stream().map(TStudent::getId).collect(Collectors.toList());
+
+					 // 步骤4：检查要修改的征订记录是否属于这些学生
+					 QueryWrapper<TSubscription> wrapper = new QueryWrapper<>();
+					 wrapper.in("id", ids)
+							 .notIn("student_id", counselorStudentIds);
+					 List<TSubscription> noAuthRecords = tSubscriptionService.list(wrapper);
+					 if (!noAuthRecords.isEmpty()) {
+						 log.warn("辅导员{}尝试修改非管理班级学生的征订记录，非法ID: {}", counselor.getCounselorName(), noAuthRecords.stream().map(TSubscription::getId).collect(Collectors.joining(",")));
+						 return Result.error("你只能修改自己管理班级下学生的征订记录，无法操作其他班级记录！");
+					 }
+				 } else {
+					 // 学生：只能修改自己的记录
+					 QueryWrapper<TSubscription> wrapper = new QueryWrapper<>();
+					 wrapper.in("id", ids)
+							 .ne("student_id", studentId);
+					 List<TSubscription> noAuthRecords = tSubscriptionService.list(wrapper);
+					 if (!noAuthRecords.isEmpty()) {
+						 log.warn("学生{}尝试修改他人征订记录，非法ID: {}", studentId, noAuthRecords.stream().map(TSubscription::getId).collect(Collectors.joining(",")));
+						 return Result.error("你只能修改自己的征订记录，无法操作他人记录！");
+					 }
 				 }
 			 }
 

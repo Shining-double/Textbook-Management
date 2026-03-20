@@ -364,32 +364,23 @@ const superQueryConfig = reactive(superQuerySchema);
 const handleBatchUpdateSubscribeStatus = async () => {
   try {
     let subscriptionIds: string[] = [];
-    const tableData = await fetchTableData();
 
-    // 1. 分角色处理数据筛选
+    // 获取当前表格的筛选参数
+    const tableInstance = tableContext[2];
+    const currentParams = tableInstance?.params || queryParam;
+
+    // 1. 获取筛选后的数据
+    const tableData = await fetchTableData(currentParams);
+
+    // 2. 分角色处理数据筛选
     if (unref(isStudent)) {
-      // 调试日志
-      console.log("【调试】currentStudentId.value:", currentStudentId.value);
-      console.log("【调试】tableData.records:", tableData.records);
-
       // 学生端：筛选自己的未征订记录
       const validRecords = tableData.records.filter(item => {
         const isUnSubscribed = item.subscribeStatus !== '1' && item.subscribeStatus !== '已征订' && item.subscribeStatus !== '已确认';
         // 直接使用记录中的student_id进行匹配
         const isOwnRecord = true; // 学生端只显示自己的记录，所以直接返回true
-
-        // 调试日志
-        console.log("【调试】记录student_id:", item.student_id);
-        console.log("【调试】isUnSubscribed:", isUnSubscribed);
-        console.log("【调试】isOwnRecord:", isOwnRecord);
-
-
         return isUnSubscribed && isOwnRecord;
       });
-
-      // 调试日志
-      console.log("【调试】validRecords:", validRecords);
-
       subscriptionIds = validRecords.map(item => item.id).filter(Boolean);
     } else {
       // 管理员/辅导员端：筛选选中的未征订记录
@@ -405,7 +396,7 @@ const handleBatchUpdateSubscribeStatus = async () => {
       subscriptionIds = validRecords.map(item => item.id).filter(Boolean);
     }
 
-    // 2. 无数据判断
+    // 3. 无数据判断
     if (subscriptionIds.length === 0) {
       const tipMsg = unref(isStudent)
         ? "暂无属于你的未征订记录需要修改！"
@@ -414,24 +405,20 @@ const handleBatchUpdateSubscribeStatus = async () => {
       return;
     }
 
-    // 3. 兼容loading（避免close报错，直接去掉loading逻辑）
-    try {
-      // 对于学生端，使用第一条记录的student_id作为studentId参数
-      let studentIdForRequest = unref(isStudent)
-        ? tableData.records[0]?.student_id || currentStudentId.value
-        : userStore.getUserInfo.id;
+    // 4. 执行批量操作
+    // 对于学生端，使用第一条记录的student_id作为studentId参数
+    let studentIdForRequest = unref(isStudent)
+      ? tableData.records[0]?.student_id || currentStudentId.value
+      : userStore.getUserInfo.id;
 
-      const res = await batchUpdateSubscribeStatus({
-        ids: subscriptionIds,
-        subscribeStatus: '1',
-        studentId: studentIdForRequest
-      });
-      createMessage.success(res.msg || `成功修改${subscriptionIds.length}条记录的征订状态！`);
-    } catch (batchError) {
-      throw batchError;
-    } finally {
-      // 去掉loading.close，避免报错
-    }
+    const res = await batchUpdateSubscribeStatus({
+      ids: subscriptionIds,
+      subscribeStatus: '1',
+      studentId: studentIdForRequest
+    });
+    createMessage.success(res.msg || `成功修改${subscriptionIds.length}条记录的征订状态！`);
+
+    // 5. 刷新表格
     reload();
   } catch (e: any) {
     console.error("【批量修改失败】：", e);
