@@ -411,13 +411,16 @@ function onSyncFinally({ isToLocal }) {
  * 操作栏
  */
 function getTableAction(record): ActionItem[] {
-  return [
-    {
+  const actions = [];
+  // 只有管理员可以看到编辑按钮
+  if (isAdmin) {
+    actions.push({
       label: '编辑',
       onClick: handleEdit.bind(null, record),
-      // ifShow: () => hasPermission('system:user:edit'),
-    },
-  ];
+      auth: 'zbu:t_counselor:edit'
+    });
+  }
+  return actions;
 }
 /**
  * 下拉操作栏
