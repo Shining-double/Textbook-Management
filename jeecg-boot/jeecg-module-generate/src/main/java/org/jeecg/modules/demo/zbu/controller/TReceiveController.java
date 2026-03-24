@@ -35,6 +35,7 @@ import org.jeecgframework.poi.excel.entity.ImportParams;
 import org.jeecgframework.poi.excel.view.JeecgEntityExcelView;
 import org.jeecg.common.system.base.controller.JeecgController;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.jdbc.core.BeanPropertyRowMapper;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
@@ -79,6 +80,10 @@ public class TReceiveController extends JeecgController<TReceive, ITReceiveServi
      private ITClassService tClassService;
 	 @Autowired
 	 private JdbcTemplate jdbcTemplate;
+	 @Autowired
+	 private ITMajorService tMajorService;
+	 @Autowired
+	 private ITCollegeService tCollegeService;
 
 	 // 角色编码常量
 	 private static final String ADMIN_ROLE_CODE = "admin";
@@ -263,27 +268,95 @@ public class TReceiveController extends JeecgController<TReceive, ITReceiveServi
     @RequiresPermissions("zbu:t_receive:exportXls")
     @RequestMapping(value = "/exportXls")
     public ModelAndView exportXls(HttpServletRequest request, TReceive tReceive) {
-		// 导出时同样按角色过滤数据（和列表查询逻辑一致）
-		LoginUser loginUser = (LoginUser) SecurityUtils.getSubject().getPrincipal();
-		if (loginUser != null) {
-			SysUser currentUser = sysUserService.getUserByName(loginUser.getUsername());
-			String userRoleType = getUserRoleType(currentUser.getId());
-			QueryWrapper<TReceive> queryWrapper = QueryGenerator.initQueryWrapper(tReceive, request.getParameterMap());
+		// 1. 初始化导出视图（JeecgBoot原生，无任何报错）
+		ModelAndView mv = new ModelAndView(new JeecgEntityExcelView());
+		ExportParams exportParams = new ExportParams("领取表", "领取表数据");
+		mv.addObject(NormalExcelConstants.PARAMS, exportParams);
+		mv.addObject(NormalExcelConstants.CLASS, TReceive.class);
 
-			// 学生仅导出自己的记录
-			if (STUDENT_ROLE_CODE.equals(userRoleType)) {
-				TStudent student = tStudentService.lambdaQuery()
-						.eq(TStudent::getUserId, currentUser.getId())
-						.one();
-				if (student != null) {
-					queryWrapper.eq("receive_operator", student.getId());
+		List<TReceive> list = new ArrayList<>();
+		try {
+			// 1. 获取登录用户
+			Subject subject = SecurityUtils.getSubject();
+			if (subject == null || !subject.isAuthenticated()) {
+				mv.addObject(NormalExcelConstants.DATA_LIST, list);
+				return mv;
+			}
+			LoginUser loginUser = (LoginUser) subject.getPrincipal();
+			if (loginUser == null) {
+				mv.addObject(NormalExcelConstants.DATA_LIST, list);
+				return mv;
+			}
+
+			// 2. 角色判断
+			String roleCodeStr = loginUser.getRoleCode();
+			boolean isAdmin = false;
+			boolean isCounselor = false;
+			if (roleCodeStr != null && !roleCodeStr.isEmpty()) {
+				String[] roleCodes = roleCodeStr.split(",");
+				for (String code : roleCodes) {
+					code = code.trim();
+					if ("admin".equals(code)) {
+						isAdmin = true;
+						break;
+					}
+					if ("counselor".equals(code)) {
+						isCounselor = true;
+					}
 				}
 			}
-			// 辅导员/管理员导出所有，无需额外过滤
-			tReceiveService.list(queryWrapper);
+			// 管理员兜底判断
+			if (!isAdmin && "admin".equals(loginUser.getUsername())) {
+				isAdmin = true;
+			}
+
+			// 3. 按角色查询 领取表视图 v_receive_with_details
+			if (isAdmin) {
+				// 管理员：导出全部视图数据
+				list = jdbcTemplate.query(
+						"SELECT * FROM v_receive_with_details ORDER BY createTime DESC",
+						new BeanPropertyRowMapper<>(TReceive.class)
+				);
+			} else if (isCounselor) {
+				// 辅导员：仅导出自己管理的班级
+				TCounselor counselor = tCounselorService.lambdaQuery()
+						.eq(TCounselor::getUserId, loginUser.getId()).one();
+				if (counselor != null) {
+					List<TClass> classList = tClassService.lambdaQuery()
+							.eq(TClass::getCounselorId, counselor.getId()).list();
+					if (!classList.isEmpty()) {
+						List<String> classIds = classList.stream().map(TClass::getId).toList();
+						List<TStudent> studentList = tStudentService.lambdaQuery()
+								.in(TStudent::getClassId, classIds).list();
+						if (!studentList.isEmpty()) {
+							List<String> studentIds = studentList.stream().map(TStudent::getId).toList();
+							String ids = String.join("','", studentIds);
+							// 查询视图
+							String sql = "SELECT * FROM v_receive_with_details WHERE receiveOperator IN ('" + ids + "') ORDER BY createTime DESC";
+							list = jdbcTemplate.query(sql, new BeanPropertyRowMapper<>(TReceive.class));
+						}
+					}
+				}
+			} else {
+				// 学生：仅导出自己的领取记录
+				TStudent student = tStudentService.lambdaQuery()
+						.eq(TStudent::getStudentId, loginUser.getUsername()).one();
+				if (student != null) {
+					list = jdbcTemplate.query(
+							"SELECT * FROM v_receive_with_details WHERE receiveOperator = ? ORDER BY createTime DESC",
+							new BeanPropertyRowMapper<>(TReceive.class),
+							student.getId()
+					);
+				}
+			}
+		} catch (Exception e) {
+			log.error("领取表导出失败", e);
 		}
-		return super.exportXls(request, tReceive, TReceive.class, "领取表");
-    }
+
+		// 视图自带学院信息，无需手动赋值，直接导出
+		mv.addObject(NormalExcelConstants.DATA_LIST, list);
+		return mv;
+	}
 
     /**
       * 通过excel导入数据

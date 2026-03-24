@@ -30,15 +30,15 @@ export const settingList = [
     img1: geren1,
     img2: geren2,
   },
-  {
-    key: '2',
-    name: '我的组织',
-    component: 'TenantSetting',
-    isSlot:false,
-    icon:'ant-design:team-outlined',
-    img1: zuhu1,
-    img2: zuhu2,
-  },
+  // {
+  //   key: '2',
+  //   name: '我的组织',
+  //   component: 'TenantSetting',
+  //   isSlot:false,
+  //   icon:'ant-design:team-outlined',
+  //   img1: zuhu1,
+  //   img2: zuhu2,
+  // },
    {
     key: '3',
     name: '账号安全',
@@ -47,14 +47,14 @@ export const settingList = [
     img1: anquan1,
     img2: anquan2,
   },
-  {
-    key: '4',
-    name: '第三方APP',
-    component: 'WeChatDingSetting',
-    icon: 'ant-design:contacts-outlined',
-    img1: app1,
-    img2: app2,
-  },
+  // {
+  //   key: '4',
+  //   name: '第三方APP',
+  //   component: 'WeChatDingSetting',
+  //   icon: 'ant-design:contacts-outlined',
+  //   img1: app1,
+  //   img2: app2,
+  // },
 ];
 
 

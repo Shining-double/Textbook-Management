@@ -51,16 +51,7 @@ export const columns: BasicColumn[] = [
     sorter: true,
     dataIndex: 'subscribeStatus_dictText'
    },
-   {
-    title: '征订备注',
-    align:"center",
-    dataIndex: 'remark'
-   },
-   {
-    title: '征订操作时间',
-    align:"center",
-    dataIndex: 'subscribeTime'
-   },
+
    // {
    //  title: '征订截止时间',
    //  align:"center",
@@ -76,6 +67,16 @@ export const columns: BasicColumn[] = [
     align:"center",
     dataIndex: 'updateTime'
    },
+  {
+    title: '征订备注',
+    align:"center",
+    dataIndex: 'remark'
+  },
+  {
+    title: '征订操作时间',
+    align:"center",
+    dataIndex: 'subscribeTime'
+  },
 ];
 //查询数据
 export const searchFormSchema: FormSchema[] = [

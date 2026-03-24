@@ -24,14 +24,21 @@ import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import lombok.extern.slf4j.Slf4j;
 
+import org.jeecg.modules.system.entity.SysRole;
 import org.jeecg.modules.system.entity.SysUser;
+import org.jeecg.modules.system.entity.SysUserRole;
+import org.jeecg.modules.system.service.ISysRoleService;
+import org.jeecg.modules.system.service.ISysUserRoleService;
+import org.jeecg.modules.system.service.ISysUserService;
 import org.jeecgframework.poi.excel.ExcelImportUtil;
 import org.jeecgframework.poi.excel.def.NormalExcelConstants;
 import org.jeecgframework.poi.excel.entity.ExportParams;
 import org.jeecgframework.poi.excel.entity.ImportParams;
 import org.jeecgframework.poi.excel.view.JeecgEntityExcelView;
 import org.jeecg.common.system.base.controller.JeecgController;
+import org.jeecgframework.poi.excel.view.JeecgMapExcelView;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.jdbc.core.BeanPropertyRowMapper;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
@@ -78,6 +85,20 @@ public class TSubscriptionController extends JeecgController<TSubscription, ITSu
 	 private StudentAllBillSummaryController studentAllBillSummaryController;
 	 @Autowired
 	 private JdbcTemplate jdbcTemplate;
+	 @Autowired
+	 private ITCollegeService tCollegeService;
+	 @Autowired
+	 private ISysUserService sysUserService;
+	 @Autowired
+	 private ISysUserRoleService sysUserRoleService;
+	 @Autowired
+	 private ISysRoleService sysRoleService;
+
+
+	 // 角色编码常量
+	 private static final String ADMIN_ROLE_CODE = "admin";
+	 private static final String COUNSELOR_ROLE_CODE = "counselor";
+	 private static final String STUDENT_ROLE_CODE = "student";
 
 
 
@@ -119,7 +140,7 @@ public class TSubscriptionController extends JeecgController<TSubscription, ITSu
 		IPage<TSubscription> pageList = tSubscriptionService.page(page, queryWrapper);
 		return Result.OK(pageList);
 	}
-	
+
 	/**
 	 *   添加
 	 *
@@ -137,7 +158,7 @@ public class TSubscriptionController extends JeecgController<TSubscription, ITSu
 
 		return Result.OK("添加成功！");
 	}
-	
+
 	/**
 	 *  编辑
 	 *
@@ -152,7 +173,7 @@ public class TSubscriptionController extends JeecgController<TSubscription, ITSu
 		tSubscriptionService.updateById(tSubscription);
 		return Result.OK("编辑成功!");
 	}
-	
+
 	/**
 	 *   通过id删除
 	 *
@@ -167,7 +188,7 @@ public class TSubscriptionController extends JeecgController<TSubscription, ITSu
 		tSubscriptionService.removeById(id);
 		return Result.OK("删除成功!");
 	}
-	
+
 	/**
 	 *  批量删除
 	 *
@@ -182,7 +203,7 @@ public class TSubscriptionController extends JeecgController<TSubscription, ITSu
 		this.tSubscriptionService.removeByIds(Arrays.asList(ids.split(",")));
 		return Result.OK("批量删除成功!");
 	}
-	
+
 	/**
 	 * 通过id查询
 	 *
@@ -209,8 +230,52 @@ public class TSubscriptionController extends JeecgController<TSubscription, ITSu
     @RequiresPermissions("zbu:t_subscription:exportXls")
     @RequestMapping(value = "/exportXls")
     public ModelAndView exportXls(HttpServletRequest request, TSubscription tSubscription) {
-        return super.exportXls(request, tSubscription, TSubscription.class, "征订表");
-    }
+		ModelAndView mv = new ModelAndView(new JeecgEntityExcelView());
+		ExportParams exportParams = new ExportParams("征订表", "征订表数据");
+		mv.addObject(NormalExcelConstants.PARAMS, exportParams);
+		mv.addObject(NormalExcelConstants.CLASS, TSubscription.class);
+
+		LoginUser loginUser = (LoginUser) SecurityUtils.getSubject().getPrincipal();
+		List<TSubscription> list = new ArrayList<>();
+
+		if (loginUser != null) {
+			SysUser currentUser = sysUserService.getUserByName(loginUser.getUsername());
+			String userRoleType = getUserRoleType(currentUser.getId());
+			StringBuilder sql = new StringBuilder("SELECT * FROM v_subscription_with_details WHERE 1=1");
+
+			// --------- 权限过滤（查询视图时直接拼接条件）---------
+			// 1. 学生：只看自己
+			if (STUDENT_ROLE_CODE.equals(userRoleType)) {
+				TStudent student = tStudentService.lambdaQuery().eq(TStudent::getUserId, currentUser.getId()).one();
+				if (student != null) {
+					sql.append(" AND student_id = '").append(student.getId()).append("'");
+				}
+			}
+			// 2. 辅导员：只看自己管理的班级
+			else if (COUNSELOR_ROLE_CODE.equals(userRoleType)) {
+				TCounselor counselor = tCounselorService.lambdaQuery().eq(TCounselor::getUserId, currentUser.getId()).one();
+				if (counselor != null) {
+					List<TClass> classList = tClassService.lambdaQuery().eq(TClass::getCounselorId, counselor.getId()).list();
+					if (!classList.isEmpty()) {
+						List<String> studentIds = tStudentService.lambdaQuery()
+								.in(TStudent::getClassId, classList)
+								.list().stream().map(TStudent::getId).toList();
+						if (!studentIds.isEmpty()) {
+							String ids = String.join("','", studentIds);
+							sql.append(" AND student_id IN ('").append(ids).append("')");
+						}
+					}
+				}
+			}
+			// 3. 管理员：查询全部视图数据
+
+			// --------- 直接查询视图（自动带学院名称）---------
+			list = jdbcTemplate.query(sql.toString(), new BeanPropertyRowMapper<>(TSubscription.class));
+		}
+
+		mv.addObject(NormalExcelConstants.DATA_LIST, list);
+		return mv;
+	}
 
     /**
       * 通过excel导入数据
@@ -278,7 +343,6 @@ public class TSubscriptionController extends JeecgController<TSubscription, ITSu
 						 .queryForList("SELECT * FROM v_subscription_with_details ORDER BY createTime DESC");
 				 log.info("管理员模式，查询到{}条征订记录", subList.size());
 			 } else if (isCounselor) {
-				 // ========== 新增：辅导员逻辑 ==========
 				 // 步骤1：通过sys_user.id查询辅导员信息
 				 QueryWrapper<TCounselor> counselorWrapper = new QueryWrapper<>();
 				 counselorWrapper.eq("user_id", loginUser.getId()); // t_counselor的userId关联sys_user.id
@@ -766,6 +830,37 @@ public class TSubscriptionController extends JeecgController<TSubscription, ITSu
 			 log.error("同意征订失败", e);
 			 return Result.error("同意征订失败：" + e.getMessage());
 		 }
+	 }
+
+
+	 private String getUserRoleType(String userId) {
+		 // 1. 查询用户关联的角色
+		 QueryWrapper<SysUserRole> userRoleWrapper = new QueryWrapper<>();
+		 userRoleWrapper.eq("user_id", userId);
+		 List<SysUserRole> userRoleList = sysUserRoleService.list(userRoleWrapper);
+		 if (userRoleList.isEmpty()) {
+			 return "";
+		 }
+
+		 // 2. 提取角色编码
+		 List<String> roleIds = userRoleList.stream()
+				 .map(SysUserRole::getRoleId)
+				 .collect(Collectors.toList());
+		 List<SysRole> roleList = sysRoleService.listByIds(roleIds);
+
+		 // 3. 判断角色优先级：管理员 > 辅导员 > 学生
+		 for (SysRole role : roleList) {
+			 if (ADMIN_ROLE_CODE.equals(role.getRoleCode())) {
+				 return ADMIN_ROLE_CODE;
+			 }
+			 if (COUNSELOR_ROLE_CODE.equals(role.getRoleCode())) {
+				 return COUNSELOR_ROLE_CODE;
+			 }
+			 if (STUDENT_ROLE_CODE.equals(role.getRoleCode())) {
+				 return STUDENT_ROLE_CODE;
+			 }
+		 }
+		 return "";
 	 }
 
 }
