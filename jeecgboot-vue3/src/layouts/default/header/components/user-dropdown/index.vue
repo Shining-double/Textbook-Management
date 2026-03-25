@@ -13,7 +13,7 @@
       <Menu @click="handleMenuClick">
         <MenuItem itemKey="doc" :text="t('layout.header.dropdownItemDoc')" icon="ion:document-text-outline" v-if="getShowDoc" />
         <MenuDivider v-if="getShowDoc" />
-        <MenuItem itemKey="account" :text="t('layout.header.dropdownItemSwitchAccount')" icon="ant-design:setting-outlined" />
+        <MenuItem itemKey="account" :text="t('layout.header.dropdownItemSwitchAccount')" icon="ant-design:setting-outlined" v-if="isAdmin"/>
         <MenuItem itemKey="password" :text="t('layout.header.dropdownItemSwitchPassword')" icon="ant-design:edit-outlined" />
 <!--        <MenuItem itemKey="depart" :text="t('layout.header.dropdownItemSwitchDepart')" icon="ant-design:cluster-outlined" />-->
         <MenuItem itemKey="cache" :text="t('layout.header.dropdownItemRefreshCache')" icon="ion:sync-outline" />
@@ -97,6 +97,12 @@
         } else {
           return getFileAccessHttpUrl(avatar);
         }
+      });
+
+      // 判断是否为管理员
+      const isAdmin = computed(() => {
+        const userInfo = userStore.getUserInfo;
+        return userInfo && (userInfo.username === 'admin' || userInfo.username === 'sysadmin');
       });
 
       const [register, { openModal }] = useModal();
@@ -187,6 +193,7 @@
         updatePasswordRef,
         passwordVisible,
         lockActionVisible,
+        isAdmin
       };
     },
   });

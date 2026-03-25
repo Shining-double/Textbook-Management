@@ -38,16 +38,16 @@ export const columns: BasicColumn[] = [
     align:"center",
     dataIndex: 'receiveRemark'
   },
-  {
-    title: '创建日期',
-    align:"center",
-    dataIndex: 'createTime'
-  },
-  {
-    title: '更新日期',
-    align:"center",
-    dataIndex: 'updateTime'
-  },
+  // {
+  //   title: '创建日期',
+  //   align:"center",
+  //   dataIndex: 'createTime'
+  // },
+  // {
+  //   title: '更新日期',
+  //   align:"center",
+  //   dataIndex: 'updateTime'
+  // },
 ];
 
 // ========== 正确的搜索表单配置（FormSchema） ==========

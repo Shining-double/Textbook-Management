@@ -32,16 +32,16 @@ export const columns: BasicColumn[] = [
     align:"center",
     dataIndex: 'status_dictText'
    },
-   {
-    title: '创建日期',
-    align:"center",
-    dataIndex: 'createTime'
-   },
-   {
-    title: '更新日期',
-    align:"center",
-    dataIndex: 'updateTime'
-   },
+   // {
+   //  title: '创建日期',
+   //  align:"center",
+   //  dataIndex: 'createTime'
+   // },
+   // {
+   //  title: '更新日期',
+   //  align:"center",
+   //  dataIndex: 'updateTime'
+   // },
 ];
 //查询数据
 export const searchFormSchema: FormSchema[] = [
