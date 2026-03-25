@@ -18,6 +18,12 @@ export const columns: BasicColumn[] = [
     dataIndex: 'studentName'
   },
   {
+    title: '学院',
+    align:"center",
+    sorter: true,
+    dataIndex: 'collegeName'
+  },
+  {
     title: '教材',
     align:"center",
     dataIndex: 'textbookName'

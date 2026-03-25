@@ -70,7 +70,7 @@ public class TReceive implements Serializable {
     @DateTimeFormat(pattern="yyyy-MM-dd HH:mm:ss")
     @Schema(description = "更新日期")
     private java.util.Date updateTime;
-    @TableField(exist = false)
+//    @TableField(exist = false)
     @Excel(name = "学院", width = 20)
     private String collegeName;
 }

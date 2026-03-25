@@ -39,27 +39,27 @@
           <span class="gray-75 item-label">性别</span>
           <span class="gray-3">{{ userInfo.sexText }}</span>
         </div>
-        <div class="margin-bottom-10 nowarp font-size-13">
-          <span class="gray-75 item-label">职位</span>
-          <span class="gray-3">{{ userInfo.postText ? userInfo.postText : "未填写" }}</span>
-        </div>
+<!--        <div class="margin-bottom-10 nowarp font-size-13">-->
+<!--          <span class="gray-75 item-label">职位</span>-->
+<!--          <span class="gray-3">{{ userInfo.postText ? userInfo.postText : "未填写" }}</span>-->
+<!--        </div>-->
         <div class="font-size-13">
           <span class="item-label"></span>
           <span class="item-label pointer" style="color:#1e88e5" @click="openEditModal">编辑</span>
         </div>
       </div>
-      <!-- 联系信息 -->
-      <div class="account-info">
-        <div class="font-size-15 font-bold font-color-gray" style="margin-bottom: 16px">联系信息</div>
-        <div class="margin-bottom-10 font-size-13">
-          <span class="gray-75 item-label">邮箱</span>
-          <span class="gray-3">{{ userInfo.email ? userInfo.email : "未填写" }}</span>
-        </div>
-        <div class="margin-bottom-10 font-size-13">
-          <span class="gray-75 item-label">手机</span>
-          <span class="gray-3">{{ userInfo.phone ? userInfo.phone : "未填写" }}</span>
-        </div>
-      </div>
+<!--      &lt;!&ndash; 联系信息 &ndash;&gt;-->
+<!--      <div class="account-info">-->
+<!--        <div class="font-size-15 font-bold font-color-gray" style="margin-bottom: 16px">联系信息</div>-->
+<!--        <div class="margin-bottom-10 font-size-13">-->
+<!--          <span class="gray-75 item-label">邮箱</span>-->
+<!--          <span class="gray-3">{{ userInfo.email ? userInfo.email : "未填写" }}</span>-->
+<!--        </div>-->
+<!--        <div class="margin-bottom-10 font-size-13">-->
+<!--          <span class="gray-75 item-label">手机</span>-->
+<!--          <span class="gray-3">{{ userInfo.phone ? userInfo.phone : "未填写" }}</span>-->
+<!--        </div>-->
+<!--      </div>-->
     </div>
     <div class="account-data">
       <!-- 个性签名 -->
@@ -68,7 +68,7 @@
         <div class="font-size-13 flex">
           <span class="gray-75 item-label">签名</span>
           <a-upload
-            accept="jpg,jpeg,png"  
+            accept="jpg,jpeg,png"
             :max-count="1"
             :multiple="false"
             name = "file"

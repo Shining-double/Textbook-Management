@@ -39,14 +39,14 @@ export const settingList = [
   //   img1: zuhu1,
   //   img2: zuhu2,
   // },
-   {
-    key: '3',
-    name: '账号安全',
-    component: 'AccountSetting',
-    icon:'ant-design:lock-outlined',
-    img1: anquan1,
-    img2: anquan2,
-  },
+  //  {
+  //   key: '3',
+  //   name: '账号安全',
+  //   component: 'AccountSetting',
+  //   icon:'ant-design:lock-outlined',
+  //   img1: anquan1,
+  //   img2: anquan2,
+  // },
   // {
   //   key: '4',
   //   name: '第三方APP',
@@ -98,28 +98,28 @@ export const formSchema: FormSchema[] = [
       ],
     }
   },
-  {
-    field: 'relTenantIds',
-    component: 'JDictSelectTag',
-    label: '租户',
-    colProps: { span: 24 },
-    componentProps:{
-      mode:'multiple',
-      dictCode:'sys_tenant,name,id',
-      disabled:true
-    }
-  },
-  {
-    field: 'post',
-    component: 'JDictSelectTag',
-    label: '职位',
-    colProps: { span: 24 },
-    componentProps:{
-      mode:'multiple',
-      dictCode:'sys_position,name,id',
-      disabled:true
-    }
-  },
+  // {
+  //   field: 'relTenantIds',
+  //   component: 'JDictSelectTag',
+  //   label: '租户',
+  //   colProps: { span: 24 },
+  //   componentProps:{
+  //     mode:'multiple',
+  //     dictCode:'sys_tenant,name,id',
+  //     disabled:true
+  //   }
+  // },
+  // {
+  //   field: 'post',
+  //   component: 'JDictSelectTag',
+  //   label: '职位',
+  //   colProps: { span: 24 },
+  //   componentProps:{
+  //     mode:'multiple',
+  //     dictCode:'sys_position,name,id',
+  //     disabled:true
+  //   }
+  // },
   {
     label: '',
     field: 'id',

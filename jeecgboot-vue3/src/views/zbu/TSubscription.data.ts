@@ -33,6 +33,12 @@ export const columns: BasicColumn[] = [
     sorter: true,
     dataIndex: 'majorName'
   },
+  {
+    title: '学院',
+    align:"center",
+    sorter: true,
+    dataIndex: 'collegeName'
+  },
    {
     title: '征订学年',
     align:"center",

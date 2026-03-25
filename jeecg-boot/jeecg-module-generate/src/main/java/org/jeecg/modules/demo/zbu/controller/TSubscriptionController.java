@@ -541,7 +541,7 @@ public class TSubscriptionController extends JeecgController<TSubscription, ITSu
 				 return Result.error("征订表状态修改失败：无匹配的记录！");
 			 }
 
-			 // ========== 修复核心：同步更新个人账单表的征订状态（对齐领取表逻辑） ==========
+			 // ========== 修复核心：同步更新个人账单表的征订状态 ==========
 			 // 6.1 征订状态值映射（数字→文本，和账单表保持一致）
 			 Map<String, String> statusMap = new HashMap<>();
 			 statusMap.put("1", "已征订");
@@ -661,6 +661,13 @@ public class TSubscriptionController extends JeecgController<TSubscription, ITSu
 						 receive.setReceiveRemark("");
 						 receive.setCreateTime(new Date());
 						 receive.setUpdateTime(new Date());
+						 TMajor major = tMajorService.getById(subscription.getMajorId());
+						 if(major != null){
+							 TCollege college = tCollegeService.getById(major.getCollegeId());
+							 if(college != null){
+								 receive.setCollegeName(college.getCollegeName());
+							 }
+						 }
 						 receiveList.add(receive);
 						 receiveCreateCount++;
 					 }
@@ -751,6 +758,16 @@ public class TSubscriptionController extends JeecgController<TSubscription, ITSu
 			 receive.setReceiveRemark("");
 			 receive.setCreateTime(new Date());
 			 receive.setUpdateTime(new Date());
+
+			 TMajor major = tMajorService.getById(subscription.getMajorId());
+			 if(major != null){
+				 // 2. 根据专业ID查询学院
+				 TCollege college = tCollegeService.getById(major.getCollegeId());
+				 if(college != null){
+					 // 3. 赋值学院名称到领取表
+					 receive.setCollegeName(college.getCollegeName());
+				 }
+			 }
 			 log.info("准备创建领取记录：receiveOperator={}, subscriptionId={}, receiveStatus={}",
 					 receive.getReceiveOperator(), receive.getSubscriptionId(), receive.getReceiveStatus());
 			 boolean saveResult = tReceiveService.save(receive);
@@ -763,11 +780,10 @@ public class TSubscriptionController extends JeecgController<TSubscription, ITSu
 					 studentNo, subscriptionId, receive.getId());
 
 
-
 			 // 6. 创建或更新个人账单记录
 			 if (student != null) {
 				 // 补充查询：专业名称、教材名称、教材定价/折扣
-				 TMajor major = tMajorService.getById(subscription.getMajorId()); // 查专业名称
+				 major = tMajorService.getById(subscription.getMajorId()); // 查专业名称
 				 TTextbook textbook = tTextbookService.getById(subscription.getTextbookId()); // 查教材信息
 				 if (textbook != null) {
 					 // 计算折扣后费用
