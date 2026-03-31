@@ -642,7 +642,7 @@ public class TStudentController extends JeecgController<TStudent, ITStudentServi
 			ImportParams importParams = new ImportParams();
 			importParams.setTitleRows(2); // 标题行数量（根据你的Excel模板调整，比如1行标题）
 			importParams.setHeadRows(1); // 表头行数量（比如1行表头）
-			importParams.setNeedSave(true);
+			importParams.setNeedSave(false);
 
 			// 存储有效数据和失败信息
 			List<TStudent> validStudentList = new ArrayList<>(); // 仅存合法数据

@@ -599,7 +599,7 @@ public class TTextbookSelectionController extends JeecgController<TTextbookSelec
 				ImportParams params = new ImportParams();
 				params.setTitleRows(2); // 2行标题行（第1、2行）
 				params.setHeadRows(1);  // 1行表头行（第3行）
-				params.setNeedSave(true);
+				params.setNeedSave(false);
 
 				// 1. 读取Excel数据
 				List<TTextbookSelection> list = ExcelImportUtil.importExcel(

@@ -198,7 +198,7 @@ public class TMajorController extends JeecgController<TMajor, ITMajorService> {
 			ImportParams importParams = new ImportParams();
 			importParams.setTitleRows(2); // 标题行数量
 			importParams.setHeadRows(1); // 表头行数量
-			importParams.setNeedSave(true);
+			importParams.setNeedSave(false);
 
 			// 存储有效数据和失败信息
 			List<TMajor> validMajorList = new ArrayList<>();
