@@ -11,8 +11,9 @@ enum Api {
   deleteBatch = '/zbu/tStudent/deleteBatch',
   importExcel = '/zbu/tStudent/importExcel',
   exportXls = '/zbu/tStudent/exportXls',
-  // 新增：获取当前登录学生信息的接口
-  getCurrentStudent = '/zbu/tStudent/getCurrentStudent'
+  getCurrentStudent = '/zbu/tStudent/getCurrentStudent',
+  getMajorList = '/zbu/tStudent/getMajorList',
+  getClassList = '/zbu/tStudent/getClassList',
 }
 /**
  * 导出api
@@ -68,3 +69,7 @@ export const saveOrUpdate = (params, isUpdate) => {
 // 新增：调用后端获取当前登录学生信息的接口
 export const getCurrentStudent = () =>
   defHttp.get({url: Api.getCurrentStudent});
+
+// 新增：专业/班级下拉框方法（前端直接调用）
+export const getMajorList = () => defHttp.get({ url: Api.getMajorList });
+export const getClassList = () => defHttp.get({ url: Api.getClassList });

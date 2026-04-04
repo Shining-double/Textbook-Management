@@ -934,4 +934,23 @@ public class TStudentController extends JeecgController<TStudent, ITStudentServi
 		 }
 	 }
 
+
+	 /**
+	  * 获取所有专业（下拉框专用，无权限拦截）
+	  */
+	 @GetMapping("/getMajorList")
+	 public Result<List<TMajor>> getMajorList() {
+		 List<TMajor> list = tMajorService.list();
+		 return Result.OK(list);
+	 }
+
+	 /**
+	  * 获取所有班级（下拉框专用，无权限拦截）
+	  */
+	 @GetMapping("/getClassList")
+	 public Result<List<TClass>> getClassList() {
+		 List<TClass> list = tClassService.list();
+		 return Result.OK(list);
+	 }
+
 }

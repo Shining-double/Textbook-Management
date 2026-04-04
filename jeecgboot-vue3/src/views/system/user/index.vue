@@ -127,10 +127,10 @@ const [registerQuitAgentModal, { openModal: openQuitAgentModal }] = useModal();
 //离职用户列表model
 const [registerQuitModal, { openModal: openQuitModal }] = useModal();
 
-// 存储辅导员管理的学生用户ID列表（使用普通数组，避免Proxy问题）
-let counselorStudentUserIds: string[] = [];
+// 存储辅导员管理的学生用户ID列表
+const counselorStudentUserIds = ref<string[]>([]);
 // 标志位：学生列表是否已加载
-let counselorStudentsLoaded = false;
+const counselorStudentsLoaded = ref(false);
 
 // 获取辅导员管理的学生用户ID列表
 const fetchCounselorStudents = async () => {
@@ -142,18 +142,22 @@ const fetchCounselorStudents = async () => {
     console.log('getCounselorStudents response:', res);
     console.log('getCounselorStudents response is array:', Array.isArray(res));
 
-    // 直接使用res作为学生ID列表
+    // 处理后端返回的结果，兼容defHttp.get的处理
     let studentIds = [];
     if (Array.isArray(res)) {
+      // 如果直接返回的是数组，说明defHttp已经处理了Result对象
       studentIds = res;
+    } else if (res && res.success && Array.isArray(res.result)) {
+      // 如果返回的是Result对象
+      studentIds = res.result;
     }
 
     console.log('studentIds:', studentIds);
     console.log('studentIds.length:', studentIds.length);
 
-    // 直接设置值
-    counselorStudentUserIds = studentIds;
-    counselorStudentsLoaded = true;
+    // 设置响应式变量值
+    counselorStudentUserIds.value = studentIds;
+    counselorStudentsLoaded.value = true;
 
     console.log('counselorStudentUserIds:', counselorStudentUserIds);
     console.log('counselorStudentUserIds.length:', counselorStudentUserIds.length);
@@ -165,50 +169,60 @@ const fetchCounselorStudents = async () => {
   }
 };
 
+
 // 包装API函数，添加过滤逻辑
 const wrappedApi = async (params) => {
   console.log('wrappedApi called, isCounselor:', unref(isCounselor));
 
-  // 如果是辅导员，确保学生列表已加载
+  // 如果是辅导员，需要获取所有数据后再过滤
   if (unref(isCounselor)) {
-    // 如果学生列表还没有加载，先获取
-    if (counselorStudentUserIds.length === 0) {
+    // 确保学生列表已加载
+    if (counselorStudentUserIds.value.length === 0) {
       console.log('Student list not loaded, fetching...');
       await fetchCounselorStudents();
-      console.log('After fetchCounselorStudents, studentUserIds:', counselorStudentUserIds);
-      console.log('counselorStudentUserIds.length:', counselorStudentUserIds.length);
+      console.log('After fetchCounselorStudents, studentUserIds:', counselorStudentUserIds.value);
+      console.log('counselorStudentUserIds.length:', counselorStudentUserIds.value.length);
     }
-  }
 
-  // 调用原始API获取数据
-  const res = await listNoCareTenant(params);
-  console.log('original API response:', res);
+    console.log('filtering data with studentUserIds:', counselorStudentUserIds.value);
+    console.log('counselorStudentUserIds.length:', counselorStudentUserIds.value.length);
 
-  // 如果是辅导员，过滤数据
-  if (unref(isCounselor)) {
-    console.log('filtering data with studentUserIds:', counselorStudentUserIds);
-    console.log('counselorStudentUserIds.length:', counselorStudentUserIds.length);
+    // 获取所有数据（不分页）
+    const allRes = await listNoCareTenant({ pageNo: 1, pageSize: 1000 });
+    console.log('all data response:', allRes);
 
-    if (counselorStudentUserIds.length > 0) {
-      const filteredRecords = res.records.filter((item) => counselorStudentUserIds.includes(item.id));
-      console.log('filtered records length:', filteredRecords.length);
+    if (counselorStudentUserIds.value.length > 0) {
+      const allFilteredRecords = allRes.records.filter((item) => counselorStudentUserIds.value.includes(item.id));
+      console.log('all filtered records length:', allFilteredRecords.length);
+
+      // 手动进行分页
+      const pageNo = params.pageNo || 1;
+      const pageSize = params.pageSize || 10;
+      const start = (pageNo - 1) * pageSize;
+      const end = start + pageSize;
+      const paginatedRecords = allFilteredRecords.slice(start, end);
+
+      console.log('paginated records length:', paginatedRecords.length);
       return {
-        ...res,
-        records: filteredRecords,
-        total: filteredRecords.length
+        ...allRes,
+        records: paginatedRecords,
+        total: allFilteredRecords.length // 更新total为过滤后的总数量
       };
     }
     // 如果没有学生，返回空数据
     return {
-      ...res,
+      ...allRes,
       records: [],
-      total: 0
+      total: 0 // 更新total为0
     };
   }
 
-  // 其他情况返回原始数据
+  // 其他情况使用原始分页数据
+  const res = await listNoCareTenant(params);
+  console.log('original API response:', res);
   return res;
 };
+
 
 // 监听isCounselor变化，当确定为辅导员时获取学生列表
 watch(isCounselor, (newVal) => {
@@ -246,18 +260,7 @@ const { prefixCls, tableContext, onExportXls, onImportXls } = useListPage({
     },
     afterFetch: (data) => {
       console.log('afterFetch called, isCounselor:', unref(isCounselor), 'data length:', data.length);
-      // 辅导员只能看到自己管理的学生
-      if (unref(isCounselor)) {
-        console.log('counselorStudentUserIds:', counselorStudentUserIds);
-        console.log('counselorStudentUserIds.length:', counselorStudentUserIds.length);
-        if (counselorStudentUserIds.length > 0) {
-          const filteredData = data.filter((item) => counselorStudentUserIds.includes(item.id));
-          console.log('filteredData length:', filteredData.length);
-          return filteredData;
-        }
-        console.log('studentUserIds is empty, returning empty array');
-        return [];
-      }
+      // 辅导员的过滤逻辑已经在wrappedApi中实现，这里不需要重复过滤
       return data;
     },
     defSort: {

@@ -47,7 +47,7 @@
   import { useListPage } from '/@/hooks/system/useListPage'
   import TStudentModal from './components/TStudentModal.vue'
   import {columns, searchFormSchema, superQuerySchema} from './TStudent.data';
-  import {list, deleteOne, batchDelete, getImportUrl,getExportUrl} from './TStudent.api';
+  import {list, deleteOne, batchDelete, getImportUrl,getExportUrl,getMajorList,getClassList } from './TStudent.api';
   import { downloadFile } from '/@/utils/common/renderUtils';
   import { useUserStore } from '/@/store/modules/user';
   import { useMessage } from '/@/hooks/web/useMessage';
