@@ -49,7 +49,7 @@
             </a-button>
           </a-dropdown>
         </template>
-<!--        <super-query v-if="isAdmin || isCounselor" :config="superQueryConfig" @search="handleSuperQuery" />-->
+        <!--        <super-query v-if="isAdmin || isCounselor" :config="superQueryConfig" @search="handleSuperQuery" />-->
       </template>
 
       <!-- 学生端不渲染操作列的模板 -->
@@ -74,10 +74,8 @@
     </BasicTable>
 
     <TReceiveModal
-      v-if="isAdmin || isCounselor || isStudentEdit"
       @register="registerModal"
       @success="handleSuccess"
-      :isStudentEdit="isStudentEdit"
     ></TReceiveModal>
   </div>
 </template>
@@ -106,7 +104,6 @@ const queryParam = reactive<any>({});
 const { createMessage } = useMessage();
 
 const [registerModal, {openModal}] = useModal();
-const isStudentEdit = ref(false);
 const currentStudentId = ref("");
 const currentStudentInfo = ref<Recordable>({});
 
@@ -184,6 +181,11 @@ const fetchTableData = async (params = {}) => {
     // 直接使用视图返回的数据，移除串行异步请求
     const formattedRecords: Recordable[] = rawRecords.map(item => ({
       ...item,
+      id: item.id,
+      subscriptionId: item.subscription_id || item.subscriptionId,
+      studentId: item.student_id || item.studentId,
+      textbookId: item.textbook_id || item.textbookId,
+      receiveOperator: item.receive_operator || item.receiveOperator,
       studentNo: item.studentNo || '未知学号',
       studentName: item.studentName || '未知姓名',
       textbookName: item.textbookName || '未知教材',
@@ -436,17 +438,14 @@ function handleSuperQuery(params) {
 }
 
 function handleAdd() {
-  isStudentEdit.value = false;
   openModal(true, {isUpdate: false, showFooter: true,});
 }
 
 function handleEdit(record: Recordable) {
-  isStudentEdit.value = !(unref(isAdmin) || unref(isCounselor));
   openModal(true, {record, isUpdate: true, showFooter: true,});
 }
 
 function handleDetail(record: Recordable) {
-  isStudentEdit.value = false;
   openModal(true, {record, isUpdate: true, showFooter: false,});
 }
 
@@ -459,7 +458,6 @@ async function batchHandleDelete() {
 }
 
 function handleSuccess() {
-  isStudentEdit.value = false;
   selectedRowKeys.value = [];
   reload();
 }

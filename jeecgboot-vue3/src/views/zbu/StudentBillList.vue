@@ -19,7 +19,7 @@
             <a-button type="primary" v-auth="'zbu:student_bill:add'" @click="handleAdd" preIcon="ant-design:plus-outlined"> 新增</a-button>
             <a-button type="primary" v-auth="'zbu:student_bill:sync'" @click="handleSync" preIcon="ant-design:sync-outlined" style="margin-left: 8px;"> 同步征订数据</a-button>
             <a-button  type="primary" v-auth="'zbu:student_bill:exportXls'" preIcon="ant-design:export-outlined" @click="onExportXls"> 导出</a-button>
-<!--            <j-upload-button type="primary" v-auth="'zbu:student_bill:importExcel'" preIcon="ant-design:import-outlined" @click="onImportXls">导入</j-upload-button>-->
+            <!--            <j-upload-button type="primary" v-auth="'zbu:student_bill:importExcel'" preIcon="ant-design:import-outlined" @click="onImportXls">导入</j-upload-button>-->
             <a-dropdown v-if="selectedRowKeys.length > 0">
               <template #overlay>
                 <a-menu>
@@ -33,7 +33,7 @@
                 <Icon icon="mdi:chevron-down"></Icon>
               </a-button>
             </a-dropdown>
-<!--            <super-query :config="superQueryConfig" @search="handleSuperQuery" />-->
+            <!--            <super-query :config="superQueryConfig" @search="handleSuperQuery" />-->
           </template>
         </template>
 
@@ -74,10 +74,8 @@
     </div>
 
     <StudentBillModal
-      v-if="isAdmin || isStudentEdit"
       @register="registerModal"
       @success="handleSuccess"
-      :isStudentEdit="isStudentEdit"
     ></StudentBillModal>
   </div>
 </template>
@@ -99,8 +97,6 @@ import { useMessage } from '/@/hooks/web/useMessage';
 import { getDateByPicker } from '/@/utils';
 
 type Recordable = { [key: string]: any };
-const isStudentEdit = ref(false);
-
 const tableData = ref<Recordable[]>([]);
 const totalDiscountPrice = ref<number>(0);
 
@@ -211,11 +207,14 @@ const fetchBillList = async (params = {}) => {
 
         formattedRecords.push({
           ...item,
+          id: item.id || `bill-${Math.random().toString(36).slice(2, 10)}`,
+          studentId: item.student_id || item.studentId || item.studentNo,
+          subscriptionId: item.subscription_id || item.subscriptionId,
+          textbookId: item.textbook_id || item.textbookId,
           studentNo,
           studentName,
           majorName,
           textbookName,
-          id: item.id || `bill-${Math.random().toString(36).slice(2, 10)}`,
         });
       } catch (e) {
         console.warn(`【处理账单失败】`, e);
@@ -346,7 +345,6 @@ function handleAdd() {
     createMessage.warning("仅管理员可新增账单");
     return;
   }
-  isStudentEdit.value = false;
   openModal(true, {
     isUpdate: false,
     showFooter: true,
@@ -354,7 +352,6 @@ function handleAdd() {
 }
 
 function handleEdit(record: Recordable) {
-  isStudentEdit.value = !unref(isAdmin);
   openModal(true, {
     record,
     isUpdate: true,
@@ -363,7 +360,6 @@ function handleEdit(record: Recordable) {
 }
 
 function handleDetail(record: Recordable) {
-  isStudentEdit.value = false;
   openModal(true, {
     record,
     isUpdate: true,
@@ -393,7 +389,6 @@ async function batchHandleDelete() {
 }
 
 function handleSuccess() {
-  isStudentEdit.value = false;
   selectedRowKeys.value = [];
   reload();
 }

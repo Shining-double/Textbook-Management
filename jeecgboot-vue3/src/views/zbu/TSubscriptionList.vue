@@ -32,7 +32,7 @@
             <a-button type="primary" v-auth="'zbu:t_subscription:add'" @click="handleAdd" preIcon="ant-design:plus-outlined"> 新增</a-button>
           </template>
           <a-button  type="primary" v-auth="'zbu:t_subscription:exportXls'" preIcon="ant-design:export-outlined" @click="onExportXls"> 导出</a-button>
-<!--          <j-upload-button type="primary" v-auth="'zbu:t_subscription:importExcel'" preIcon="ant-design:import-outlined" @click="onImportXls">导入</j-upload-button>-->
+          <!--          <j-upload-button type="primary" v-auth="'zbu:t_subscription:importExcel'" preIcon="ant-design:import-outlined" @click="onImportXls">导入</j-upload-button>-->
           <a-dropdown v-if="selectedRowKeys.length > 0">
             <template #overlay>
               <a-menu>
@@ -47,7 +47,7 @@
             </a-button>
           </a-dropdown>
         </template>
-<!--        <super-query v-if="isAdmin || isCounselor" :config="superQueryConfig" @search="handleSuperQuery" />-->
+        <!--        <super-query v-if="isAdmin || isCounselor" :config="superQueryConfig" @search="handleSuperQuery" />-->
       </template>
 
       <!--  修改2：学生端隐藏操作列 -->
@@ -77,10 +77,8 @@
       </template>
     </BasicTable>
     <TSubscriptionModal
-      v-if="isAdmin || isCounselor || isStudentEdit"
       @register="registerModal"
       @success="handleSuccess"
-      :isStudentEdit="isStudentEdit"
     ></TSubscriptionModal>
   </div>
 </template>
@@ -109,7 +107,6 @@ const queryParam = reactive<any>({});
 const { createMessage } = useMessage();
 
 const [registerModal, {openModal}] = useModal();
-const isStudentEdit = ref(false);
 const currentStudentId = ref("");
 const currentStudentInfo = ref<Recordable>({});
 
@@ -208,6 +205,11 @@ const fetchTableData = async (params = {}) => {
     // 3. 格式化数据（直接使用视图返回的数据）
     const formattedRecords: Recordable[] = rawRecords.map(item => ({
       ...item,
+      id: item.id,
+      studentId: item.student_id || item.studentId,
+      textbookId: item.textbook_id || item.textbookId,
+      majorId: item.major_id || item.majorId,
+      selectionId: item.selection_id || item.selectionId,
       studentNo: item.studentNo || '未知学号',
       studentName: item.studentName || '未知姓名',
       textbookName: item.textbookName || '未知教材',
@@ -441,15 +443,12 @@ function handleSuperQuery(params) {
   reload();
 }
 function handleAdd() {
-  isStudentEdit.value = false;
   openModal(true, {isUpdate: false, showFooter: true,});
 }
 function handleEdit(record: Recordable) {
-  isStudentEdit.value = !(unref(isAdmin) || unref(isCounselor));
   openModal(true, {record, isUpdate: true, showFooter: true,});
 }
 function handleDetail(record: Recordable) {
-  isStudentEdit.value = false;
   openModal(true, {record, isUpdate: true, showFooter: false,});
 }
 async function handleDelete(record) {
@@ -459,7 +458,6 @@ async function batchHandleDelete() {
   await batchDelete({ids: selectedRowKeys.value}, handleSuccess);
 }
 function handleSuccess() {
-  isStudentEdit.value = false;
   selectedRowKeys.value = [];
   reload();
 }
