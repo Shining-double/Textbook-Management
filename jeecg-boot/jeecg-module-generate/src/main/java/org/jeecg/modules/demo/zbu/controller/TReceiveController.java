@@ -1,5 +1,6 @@
 package org.jeecg.modules.demo.zbu.controller;
 
+import java.math.BigDecimal;
 import java.util.*;
 import java.util.stream.Collectors;
 import java.io.IOException;
@@ -67,6 +68,8 @@ public class TReceiveController extends JeecgController<TReceive, ITReceiveServi
 	 @Autowired
 	 private ITSubscriptionService tSubscriptionService;
 	 @Autowired
+	 private ITMajorService tMajorService;
+	 @Autowired
 	 private ITTextbookService tTextbookService;
 	 @Autowired
 	 private ISysUserService sysUserService;
@@ -80,8 +83,6 @@ public class TReceiveController extends JeecgController<TReceive, ITReceiveServi
      private ITClassService tClassService;
 	 @Autowired
 	 private JdbcTemplate jdbcTemplate;
-	 @Autowired
-	 private ITMajorService tMajorService;
 	 @Autowired
 	 private ITCollegeService tCollegeService;
 
@@ -200,7 +201,7 @@ public class TReceiveController extends JeecgController<TReceive, ITReceiveServi
 	 * @return
 	 */
 	@AutoLog(value = "领取表-编辑")
-	@Operation(summary="领取表-编辑")
+	@Operation(summary="领取表-编 dev辑")
 	@RequiresPermissions("zbu:t_receive:edit")
 	@RequestMapping(value = "/edit", method = {RequestMethod.PUT,RequestMethod.POST})
 	public Result<String> edit(@RequestBody TReceive tReceive) {
@@ -474,7 +475,7 @@ public class TReceiveController extends JeecgController<TReceive, ITReceiveServi
 				 return Result.error("领取表状态修改失败：无匹配的领取记录！");
 			 }
 
-			 // 7. 同步更新个人账单（核心逻辑不变，适配角色）
+			 // 7. 同步更新个人账单（领取后创建/更新账单）
 			 if (receiveUpdateSuccess) {
 				 Map<String, String> statusMap = new HashMap<>();
 				 statusMap.put("1", "已领取");
@@ -490,6 +491,7 @@ public class TReceiveController extends JeecgController<TReceive, ITReceiveServi
 				 }
 
 				 int billUpdateCount = 0;
+				 int billCreateCount = 0;
 				 for (TReceive receive : receiveList) {
 					 String subscriptionId = receive.getSubscriptionId();
 					 if (oConvertUtils.isEmpty(subscriptionId)) {
@@ -509,11 +511,8 @@ public class TReceiveController extends JeecgController<TReceive, ITReceiveServi
 						 studentNo = student.getStudentId();
 					 }
 
-					 String textbookName = "未知教材";
 					 TTextbook textbook = tTextbookService.getById(subscription.getTextbookId());
-					 if (textbook != null) {
-						 textbookName = textbook.getTextbookName();
-					 }
+					 String textbookName = textbook != null ? textbook.getTextbookName() : "未知教材";
 
 					 QueryWrapper<StudentBill> billWrapper = new QueryWrapper<>();
 					 billWrapper.eq("student_id", studentNo)
@@ -521,18 +520,48 @@ public class TReceiveController extends JeecgController<TReceive, ITReceiveServi
 							 .eq("subscription_semester", subscription.getSubscriptionSemester())
 							 .eq("textbook_name", textbookName);
 
-					 StudentBill billUpdate = new StudentBill();
-					 billUpdate.setReceiveStatus(billReceiveStatus);
-					 billUpdate.setUpdateTime(new Date());
 
-					 boolean singleBillSuccess = studentBillService.update(billUpdate, billWrapper);
-					 if (singleBillSuccess) {
-						 billUpdateCount++;
-						 log.info("【同步账单成功】领取记录ID={} → 账单（学号={}，教材={}）状态改为{}",
-								 receive.getId(), studentNo, textbookName, billReceiveStatus);
+					 StudentBill existingBill = studentBillService.getOne(billWrapper);
+					 if (existingBill != null) {
+						 StudentBill billUpdate = new StudentBill();
+						 billUpdate.setId(existingBill.getId());
+						 billUpdate.setReceiveStatus(billReceiveStatus);
+						 billUpdate.setUpdateTime(new Date());
+						 boolean singleBillSuccess = studentBillService.updateById(billUpdate);
+						 if (singleBillSuccess) {
+							 billUpdateCount++;
+							 log.info("【同步账单成功】领取记录ID={} → 账单（学号={}，教材={}）状态改为{}",
+									 receive.getId(), studentNo, textbookName, billReceiveStatus);
+						 }
+					 } else if ("1".equals(receiveStatus) && textbook != null) {
+						 TMajor major = tMajorService.getById(subscription.getMajorId());
+						 BigDecimal price = textbook.getPrice() != null ? textbook.getPrice() : BigDecimal.ZERO;
+						 BigDecimal discount = textbook.getDiscount() != null ? textbook.getDiscount() : new BigDecimal("1");
+						 BigDecimal discountPrice = price.multiply(discount).setScale(2, java.math.RoundingMode.HALF_UP);
+
+						 StudentBill newBill = new StudentBill();
+						 newBill.setStudentId(studentNo);
+						 newBill.setMajorName(major != null ? major.getMajorName() : "");
+						 newBill.setSubscriptionYear(subscription.getSubscriptionYear());
+						 newBill.setSubscriptionSemester(subscription.getSubscriptionSemester());
+						 newBill.setTextbookName(textbookName);
+						 newBill.setPrice(price);
+						 newBill.setDiscountPrice(discountPrice);
+						 newBill.setSubscribeStatus(subscription.getSubscribeStatus());
+						 newBill.setReceiveStatus(billReceiveStatus);
+						 newBill.setRemark("");
+						 newBill.setCreateTime(new Date());
+						 newBill.setUpdateTime(new Date());
+
+						 boolean createSuccess = studentBillService.save(newBill);
+						 if (createSuccess) {
+							 billCreateCount++;
+							 log.info("【创建账单成功】领取记录ID={} → 账单（学号={}，教材={}）创建成功",
+									 receive.getId(), studentNo, textbookName);
+						 }
 					 }
 				 }
-				 log.info("同步更新个人账单结果：成功更新{}条，领取状态改为{}", billUpdateCount, billReceiveStatus);
+				 log.info("同步个人账单结果：更新{}条，创建{}条，领取状态改为{}", billUpdateCount, billCreateCount, billReceiveStatus);
 			 }
 
 			 return Result.OK("领取表状态修改成功（已同步个人账单）！");

@@ -79,13 +79,13 @@ public class TTextbookSelectionController extends JeecgController<TTextbookSelec
 														   @RequestParam(name = "pageSize", defaultValue = "10") Integer pageSize,
 														   HttpServletRequest req) {
 
-
 		// 自定义查询规则
 		Map<String, QueryRuleEnum> customeRuleMap = new HashMap<>();
 		// 自定义多选的查询规则为：LIKE_WITH_OR
 		customeRuleMap.put("semester", QueryRuleEnum.LIKE_WITH_OR);
 		customeRuleMap.put("selectionStatus", QueryRuleEnum.LIKE_WITH_OR);
-		QueryWrapper<TTextbookSelection> queryWrapper = QueryGenerator.initQueryWrapper(tTextbookSelection, req.getParameterMap(), customeRuleMap);
+		QueryWrapper<TTextbookSelection> queryWrapper = QueryGenerator.initQueryWrapper(tTextbookSelection,
+				req.getParameterMap(), customeRuleMap);
 		Page<TTextbookSelection> page = new Page<TTextbookSelection>(pageNo, pageSize);
 		IPage<TTextbookSelection> pageList = tTextbookSelectionService.page(page, queryWrapper);
 		return Result.OK(pageList);
@@ -134,7 +134,7 @@ public class TTextbookSelectionController extends JeecgController<TTextbookSelec
 	@AutoLog(value = "教材选用表-编辑")
 	@Operation(summary = "教材选用表-编辑")
 	@RequiresPermissions("zbu:t_textbook_selection:edit")
-	@RequestMapping(value = "/edit", method = {RequestMethod.PUT, RequestMethod.POST})
+	@RequestMapping(value = "/edit", method = { RequestMethod.PUT, RequestMethod.POST })
 	@Transactional(rollbackFor = Exception.class)
 	public Result<String> edit(@RequestBody TTextbookSelection tTextbookSelection) {
 		try {
@@ -225,7 +225,9 @@ public class TTextbookSelectionController extends JeecgController<TTextbookSelec
 
 				// 计算最新的折扣价
 				BigDecimal price = newTextbook != null ? newTextbook.getPrice() : BigDecimal.ZERO;
-				BigDecimal discount = newTextbook != null && newTextbook.getDiscount() != null ? newTextbook.getDiscount() : new BigDecimal("1");
+				BigDecimal discount = newTextbook != null && newTextbook.getDiscount() != null
+						? newTextbook.getDiscount()
+						: new BigDecimal("1");
 				BigDecimal discountPrice = price.multiply(discount).setScale(2, BigDecimal.ROUND_HALF_UP);
 
 				// 查询该征订记录关联的账单记录
@@ -432,8 +434,7 @@ public class TTextbookSelectionController extends JeecgController<TTextbookSelec
 				studentAllBillSummaryController.batchIncrementSummary(
 						tMajorService.getById(delSelection.getMajorId()).getMajorName(),
 						delSelection.getSchoolYear(),
-						delSelection.getSemester()
-				);
+						delSelection.getSemester());
 				log.info("删除教材选用后，触发【增量汇总】总账单（而非全量）");
 			}
 
@@ -537,8 +538,7 @@ public class TTextbookSelectionController extends JeecgController<TTextbookSelec
 					studentAllBillSummaryController.batchIncrementSummary(
 							tMajorService.getById(firstDel.getMajorId()).getMajorName(),
 							firstDel.getSchoolYear(),
-							firstDel.getSemester()
-					);
+							firstDel.getSemester());
 					log.info("批量删除教材选用后，触发【增量汇总】总账单（而非全量）");
 				}
 			}
@@ -603,8 +603,7 @@ public class TTextbookSelectionController extends JeecgController<TTextbookSelec
 
 				// 1. 读取Excel数据
 				List<TTextbookSelection> list = ExcelImportUtil.importExcel(
-						file.getInputStream(), TTextbookSelection.class, params
-				);
+						file.getInputStream(), TTextbookSelection.class, params);
 				// 调试日志：打印读取到的总行数
 				log.info("读取到Excel数据总行数：{}", list.size());
 
@@ -647,30 +646,47 @@ public class TTextbookSelectionController extends JeecgController<TTextbookSelec
 						}
 					}
 
-					// ===== 班级解析（兼容ID/名称） =====
+					// ===== 班级解析（兼容ID/名称，支持逗号/顿号分隔的班级列表） =====
 					String classContent = selection.getClassId();
 					if (oConvertUtils.isEmpty(classContent)) {
 						errorMsgList.add("第" + rowNum + "行：班级不能为空");
 						isValid = false;
 					} else {
-						if (classContent.matches("^\\d{16,}$")) {
-							selection.setClassId(classContent.trim());
-							QueryWrapper<TClass> classIdWrapper = new QueryWrapper<>();
-							classIdWrapper.eq("id", classContent.trim());
-							if (tClassService.count(classIdWrapper) == 0) {
-								errorMsgList.add("第" + rowNum + "行：班级ID「" + classContent + "」不存在，请检查");
-								isValid = false;
+						String[] classNames = classContent.split("[，,、]"); // 按中文顿号、英文逗号、中文逗号分割
+						List<String> validClassIds = new ArrayList<>();
+						for (String singleClassName : classNames) {
+							singleClassName = singleClassName.trim();
+							if (oConvertUtils.isEmpty(singleClassName)) {
+								continue; // 跳过空字符串
 							}
-						} else {
-							QueryWrapper<TClass> classWrapper = new QueryWrapper<>();
-							classWrapper.eq("class_name", classContent.trim());
-							TClass clazz = tClassService.getOne(classWrapper);
-							if (clazz == null) {
-								errorMsgList.add("第" + rowNum + "行：班级名称「" + classContent + "」不存在，请检查");
-								isValid = false;
+							if (singleClassName.matches("^\\d{16,}$")) {
+								QueryWrapper<TClass> classIdWrapper = new QueryWrapper<>();
+								classIdWrapper.eq("id", singleClassName);
+								if (tClassService.count(classIdWrapper) == 0) {
+									errorMsgList.add("第" + rowNum + "行：班级ID「" + singleClassName + "」不存在，请检查");
+									isValid = false;
+								} else {
+									validClassIds.add(singleClassName);
+								}
 							} else {
-								selection.setClassId(clazz.getId());
+								QueryWrapper<TClass> classWrapper = new QueryWrapper<>();
+								classWrapper.eq("class_name", singleClassName);
+								TClass clazz = tClassService.getOne(classWrapper);
+								if (clazz == null) {
+									errorMsgList.add("第" + rowNum + "行：班级名称「" + singleClassName + "」不存在，请检查");
+									isValid = false;
+								} else {
+									validClassIds.add(clazz.getId());
+								}
 							}
+						}
+						if (validClassIds.isEmpty() && !classNames[0].trim().isEmpty()) {
+							errorMsgList.add("第" + rowNum + "行：班级「" + classContent + "」验证后无有效班级");
+							isValid = false;
+						} else if (validClassIds.size() == 1) {
+							selection.setClassId(validClassIds.get(0));
+						} else if (validClassIds.size() > 1) {
+							selection.setClassId(String.join(";;CLASS_SPLIT;;", validClassIds));
 						}
 					}
 
@@ -727,9 +743,38 @@ public class TTextbookSelectionController extends JeecgController<TTextbookSelec
 					return Result.error("未检测到有效数据，请检查Excel内容");
 				}
 
-				// 4. 保存数据 + 生成征订记录
-				tTextbookSelectionService.saveBatch(validList);
-				for (TTextbookSelection selection : validList) {
+				// 4. 保存数据 + 生成征订记录（处理班级列表拆分）
+				List<TTextbookSelection> finalSaveList = new ArrayList<>();
+				List<TTextbookSelection> selectionsToProcess = new ArrayList<>(validList);
+
+				for (TTextbookSelection selection : selectionsToProcess) {
+					String classIdValue = selection.getClassId();
+					if (classIdValue != null && classIdValue.contains(";;CLASS_SPLIT;;")) {
+						String[] classIds = classIdValue.split(";;CLASS_SPLIT;;");
+						for (String classId : classIds) {
+							classId = classId.trim();
+							if (oConvertUtils.isEmpty(classId)) {
+								continue;
+							}
+							TTextbookSelection newSelection = new TTextbookSelection();
+							newSelection.setMajorId(selection.getMajorId());
+							newSelection.setClassId(classId);
+							newSelection.setTextbookId(selection.getTextbookId());
+							newSelection.setSchoolYear(selection.getSchoolYear());
+							newSelection.setSemester(selection.getSemester());
+							newSelection.setSelectionStatus(selection.getSelectionStatus());
+							newSelection.setRemark(selection.getRemark());
+							newSelection.setCreateTime(new Date());
+							newSelection.setUpdateTime(new Date());
+							finalSaveList.add(newSelection);
+						}
+					} else {
+						finalSaveList.add(selection);
+					}
+				}
+
+				tTextbookSelectionService.saveBatch(finalSaveList);
+				for (TTextbookSelection selection : finalSaveList) {
 					generateSubscriptionFromSelection(selection.getId());
 					StudentBill dummyBill = new StudentBill();
 					dummyBill.setMajorName(tMajorService.getById(selection.getMajorId()).getMajorName());
@@ -740,7 +785,7 @@ public class TTextbookSelectionController extends JeecgController<TTextbookSelec
 
 				log.info("导入教材选用后，触发总账单重新汇总");
 
-				return Result.OK("导入成功！共导入" + validList.size() + "条教材选用记录");
+				return Result.OK("导入成功！共导入" + finalSaveList.size() + "条教材选用记录");
 			}
 		} catch (Exception e) {
 			log.error("Excel导入失败", e);

@@ -15,7 +15,9 @@ import org.jeecg.common.api.vo.Result;
 import org.jeecg.common.system.query.QueryGenerator;
 import org.jeecg.common.system.query.QueryRuleEnum;
 import org.jeecg.common.util.oConvertUtils;
+import org.jeecg.modules.demo.zbu.entity.StudentBill;
 import org.jeecg.modules.demo.zbu.entity.TTextbook;
+import org.jeecg.modules.demo.zbu.service.IStudentBillService;
 import org.jeecg.modules.demo.zbu.service.ITTextbookService;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
@@ -52,6 +54,8 @@ import org.apache.shiro.authz.annotation.RequiresPermissions;
 public class TTextbookController extends JeecgController<TTextbook, ITTextbookService> {
 	@Autowired
 	private ITTextbookService tTextbookService;
+	 @Autowired
+	 private IStudentBillService studentBillService;
 	
 	/**
 	 * 分页列表查询
@@ -109,7 +113,22 @@ public class TTextbookController extends JeecgController<TTextbook, ITTextbookSe
 	@RequiresPermissions("zbu:t_textbook:edit")
 	@RequestMapping(value = "/edit", method = {RequestMethod.PUT,RequestMethod.POST})
 	public Result<String> edit(@RequestBody TTextbook tTextbook) {
+		TTextbook oldTextbook = tTextbookService.getById(tTextbook.getId());
+		boolean priceChanged = false;
+		boolean discountChanged = false;
+		if (oldTextbook != null) {
+			if (tTextbook.getPrice() != null && !tTextbook.getPrice().equals(oldTextbook.getPrice())) {
+				priceChanged = true;
+			}
+			if (tTextbook.getDiscount() != null && !tTextbook.getDiscount().equals(oldTextbook.getDiscount())) {
+				discountChanged = true;
+			}
+		}
 		tTextbookService.updateById(tTextbook);
+
+		if (priceChanged || discountChanged) {
+			syncBillPriceByTextbook(tTextbook.getId(), tTextbook);
+		}
 		return Result.OK("编辑成功!");
 	}
 	
@@ -208,7 +227,7 @@ public class TTextbookController extends JeecgController<TTextbook, ITTextbookSe
 			 }
 
 			 // 2. 定义【仅允许批量修改的字段白名单】（驼峰名，对应实体类）
-			 List<String> ALLOW_UPDATE_FIELDS = Arrays.asList("sectionCode", "businessCode", "discount");
+			 List<String> ALLOW_UPDATE_FIELDS = Arrays.asList("sectionCode", "businessCode", "discount", "price");
 			 Map<String, Object> updateFields = new HashMap<>();
 
 			 // 3. 过滤参数：仅提取白名单内的字段，忽略其他所有字段
@@ -229,6 +248,16 @@ public class TTextbookController extends JeecgController<TTextbook, ITTextbookSe
 						 } catch (NumberFormatException e) {
 							 return Result.error("批量修改失败：折扣必须是有效数字（如0.85、1.0）");
 						 }
+					 } else if ("price".equals(allowField)) {
+						 try {
+							 BigDecimal price = new BigDecimal(value.toString().trim());
+							 if (price.compareTo(BigDecimal.ZERO) < 0) {
+								 return Result.error("批量修改失败：价格不能为负数");
+							 }
+							 updateFields.put(allowField, price);
+						 } catch (NumberFormatException e) {
+							 return Result.error("批量修改失败：价格必须是有效数字");
+						 }
 					 } else {
 						 // 标段/编号：直接存字符串
 						 updateFields.put(allowField, value.toString().trim());
@@ -238,7 +267,7 @@ public class TTextbookController extends JeecgController<TTextbook, ITTextbookSe
 
 			 // 4. 校验：是否选择了要修改的字段
 			 if (updateFields.isEmpty()) {
-				 return Result.error("批量修改失败：仅支持修改【标段(sectionCode)、编号(businessCode)、折扣(discount)】，请传入有效字段值");
+				 return Result.error("批量修改失败：仅支持修改【标段(sectionCode)、编号(businessCode)、折扣(discount)、价格(price)】，请传入有效字段值");
 			 }
 
 			 // 5. 构造批量更新条件，执行修改
@@ -254,9 +283,19 @@ public class TTextbookController extends JeecgController<TTextbook, ITTextbookSe
 
 			 updateWrapper.set("update_time", new Date());
 
+			 boolean priceOrDiscountChanged = updateFields.containsKey("price") || updateFields.containsKey("discount");
 			 boolean updateResult = tTextbookService.update(updateWrapper);
 			 if (updateResult) {
 				 log.info("教材表批量修改成功，修改ID：{}，修改字段：{}", idsStr, updateFields);
+				 if (priceOrDiscountChanged) {
+					 for (String textbookId : ids) {
+						 TTextbook textbook = tTextbookService.getById(textbookId);
+						 if (textbook != null) {
+							 syncBillPriceByTextbook(textbookId, textbook);
+						 }
+					 }
+					 log.info("教材价格/折扣修改后，已同步更新相关个人账单");
+				 }
 				 return Result.OK("批量修改成功！共修改" + ids.size() + "条记录，修改字段：" + updateFields.keySet());
 			 } else {
 				 return Result.error("批量修改失败：无记录被更新（请检查ID是否有效）");
@@ -291,5 +330,31 @@ public class TTextbookController extends JeecgController<TTextbook, ITTextbookSe
 		 }
 		 return sb.toString();
 	 }
+
+	 private void syncBillPriceByTextbook(String textbookId, TTextbook textbook) {
+		 try {
+			 BigDecimal price = textbook.getPrice() != null ? textbook.getPrice() : BigDecimal.ZERO;
+			 BigDecimal discount = textbook.getDiscount() != null ? textbook.getDiscount() : new BigDecimal("1");
+			 BigDecimal discountPrice = price.multiply(discount).setScale(2, java.math.RoundingMode.HALF_UP);
+
+			 UpdateWrapper<StudentBill> billUpdateWrapper = new UpdateWrapper<>();
+			 billUpdateWrapper.eq("textbook_name", textbook.getTextbookName());
+			 billUpdateWrapper.set("price", price);
+			 billUpdateWrapper.set("discount_price", discountPrice);
+			 billUpdateWrapper.set("update_time", new Date());
+
+			 boolean updateSuccess = studentBillService.update(billUpdateWrapper);
+			 if (updateSuccess) {
+				 log.info("【同步账单价格】教材ID={}，教材名称={}，新定价={}，新折后价={}，已同步更新相关个人账单",
+						 textbookId, textbook.getTextbookName(), price, discountPrice);
+			 } else {
+				 log.info("【同步账单价格】教材ID={}，教材名称={}，无匹配的个人账单需要更新",
+						 textbookId, textbook.getTextbookName());
+			 }
+		 } catch (Exception e) {
+			 log.error("【同步账单价格失败】教材ID={}，错误：{}", textbookId, e.getMessage());
+		 }
+	 }
+
 
 }
