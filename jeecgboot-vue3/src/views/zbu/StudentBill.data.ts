@@ -45,6 +45,11 @@ export const columns: BasicColumn[] = [
     dataIndex: 'textbookName' // 关键：删掉_dictText，后端返回的是textbookName
   },
   {
+    title: 'ISBN',
+    align:"center",
+    dataIndex: 'isbn'
+  },
+  {
     title: '教材定价',
     align:"center",
     dataIndex: 'price' // 关键：删掉_dictText，后端返回的是price

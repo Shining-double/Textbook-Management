@@ -1,4 +1,4 @@
-﻿<template>
+﻿﻿<template>
   <div>
     <BasicTable
       @register="registerTable"
@@ -186,12 +186,14 @@ const fetchTableData = async (params = {}) => {
       studentId: item.student_id || item.studentId,
       textbookId: item.textbook_id || item.textbookId,
       receiveOperator: item.receive_operator || item.receiveOperator,
-      studentNo: item.studentNo || '未知学号',
-      studentName: item.studentName || '未知姓名',
-      textbookName: item.textbookName || '未知教材',
-      collegeName: item.collegeName || '未知学院',
-      receiveStatus: item.receiveStatus || '0',
-      receiveStatus_dictText: item.receiveStatus === '1' ? '已领取' : '未领取',
+      studentNo: item.studentNo || item.student_no || '未知学号',
+      studentName: item.studentName || item.student_name || '未知姓名',
+      textbookName: item.textbookName || item.textbook_name || '未知教材',
+      isbn: item.isbn || '',
+      collegeName: item.collegeName || item.college_name || '未知学院',
+      majorName: item.majorName || item.major_name || '未知专业',
+      receiveStatus: item.receiveStatus || item.receive_status || '0',
+      receiveStatus_dictText: (item.receiveStatus || item.receive_status) === '1' ? '已领取' : '未领取',
       key: item.id || Math.random().toString(36).substr(2, 9)
     }));
 

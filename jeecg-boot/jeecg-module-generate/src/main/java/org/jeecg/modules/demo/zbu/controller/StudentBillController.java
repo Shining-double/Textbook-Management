@@ -18,6 +18,9 @@ import org.jeecg.common.system.vo.LoginUser;
 import org.jeecg.common.util.oConvertUtils;
 import org.jeecg.modules.demo.zbu.entity.*;
 import org.jeecg.modules.demo.zbu.service.*;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.core.RowMapper;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
@@ -64,6 +67,8 @@ public class StudentBillController extends JeecgController<StudentBill, IStudent
 	private ITMajorService tMajorService;
 	@Autowired
 	private ITReceiveService tReceiveService;
+	@Autowired
+	private JdbcTemplate jdbcTemplate;
 
 	/**
 	 * 同步征订数据到个人账单表（最终完整版）
@@ -222,17 +227,16 @@ public class StudentBillController extends JeecgController<StudentBill, IStudent
 	// @AutoLog(value = "个人账单-分页列表查询")
 	@Operation(summary = "个人账单-分页列表查询")
 	@GetMapping(value = "/list")
-	public Result<IPage<StudentBill>> queryPageList(StudentBill studentBill,
-													@RequestParam(name = "pageNo", defaultValue = "1") Integer pageNo,
-													@RequestParam(name = "pageSize", defaultValue = "10") Integer pageSize,
-													HttpServletRequest req) {
+	public Result<?> queryPageList(StudentBill studentBill,
+								   @RequestParam(name = "pageNo", defaultValue = "1") Integer pageNo,
+								   @RequestParam(name = "pageSize", defaultValue = "10") Integer pageSize,
+								   HttpServletRequest req) {
 
 		QueryWrapper<StudentBill> queryWrapper = QueryGenerator.initQueryWrapper(studentBill, req.getParameterMap());
 
 		// 1. 获取当前登录用户
 		LoginUser loginUser = (LoginUser) SecurityUtils.getSubject().getPrincipal();
 		String username = loginUser.getUsername();
-		// 新增日志：确认登录用户名和是否为管理员
 		log.info("【账单列表】登录用户名：{}，是否管理员：{}", username, "admin".equals(username) || "sysadmin".equals(username));
 
 		// 2. 判断是否是管理员
@@ -243,15 +247,54 @@ public class StudentBillController extends JeecgController<StudentBill, IStudent
 			queryWrapper.clear();
 			queryWrapper.eq("student_id", username);
 			queryWrapper.orderByDesc("create_time");
-			// 新增日志：确认过滤条件
 			log.info("【账单列表】学生端过滤条件：student_id = {}", username);
 		}
 
 		Page<StudentBill> page = new Page<StudentBill>(pageNo, pageSize);
 		IPage<StudentBill> pageList = studentBillService.page(page, queryWrapper);
-		// 新增日志：确认查询结果
+
+		// 4. 为每条记录查询ISBN
+		List<Map<String, Object>> recordsWithIsbn = new ArrayList<>();
+		for (StudentBill bill : pageList.getRecords()) {
+			Map<String, Object> recordMap = new HashMap<>();
+			recordMap.put("id", bill.getId());
+			recordMap.put("studentId", bill.getStudentId());
+			recordMap.put("majorName", bill.getMajorName());
+			recordMap.put("subscriptionYear", bill.getSubscriptionYear());
+			recordMap.put("subscriptionSemester", bill.getSubscriptionSemester());
+			recordMap.put("textbookName", bill.getTextbookName());
+			recordMap.put("price", bill.getPrice());
+			recordMap.put("discountPrice", bill.getDiscountPrice());
+			recordMap.put("subscribeStatus", bill.getSubscribeStatus());
+			recordMap.put("receiveStatus", bill.getReceiveStatus());
+			recordMap.put("remark", bill.getRemark());
+			recordMap.put("createTime", bill.getCreateTime());
+			recordMap.put("updateTime", bill.getUpdateTime());
+
+			String textbookName = bill.getTextbookName();
+			String isbn = "";
+			if (textbookName != null && !textbookName.isEmpty()) {
+				try {
+					String isbnSql = "SELECT isbn FROM t_textbook WHERE textbook_name = ? LIMIT 1";
+					isbn = jdbcTemplate.queryForObject(isbnSql, String.class, textbookName);
+				} catch (Exception e) {
+					log.warn("查询ISBN失败：{}", e.getMessage());
+				}
+			}
+			recordMap.put("isbn", isbn != null ? isbn : "");
+			recordsWithIsbn.add(recordMap);
+		}
+
+		// 5. 构建分页结果
+		Map<String, Object> result = new HashMap<>();
+		result.put("records", recordsWithIsbn);
+		result.put("total", pageList.getTotal());
+		result.put("size", pageList.getSize());
+		result.put("current", pageList.getCurrent());
+		result.put("pages", pageList.getPages());
+
 		log.info("【账单列表】查询结果总数：{}", pageList.getTotal());
-		return Result.OK(pageList);
+		return Result.OK(result);
 	}
 
 	/**

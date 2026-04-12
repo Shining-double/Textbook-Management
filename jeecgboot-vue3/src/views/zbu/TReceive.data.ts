@@ -29,6 +29,11 @@ export const columns: BasicColumn[] = [
     dataIndex: 'textbookName'
   },
   {
+    title: 'ISBN',
+    align:"center",
+    dataIndex: 'isbn'
+  },
+  {
     title: '领取状态',
     align:"center",
     sorter: true,

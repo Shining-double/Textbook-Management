@@ -208,13 +208,23 @@ const fetchBillList = async (params = {}) => {
         formattedRecords.push({
           ...item,
           id: item.id || `bill-${Math.random().toString(36).slice(2, 10)}`,
-          studentId: item.student_id || item.studentId || item.studentNo,
+          studentId: item.student_id || item.studentId,
           subscriptionId: item.subscription_id || item.subscriptionId,
           textbookId: item.textbook_id || item.textbookId,
+          majorId: item.major_id || item.majorId,
+          receiveId: item.receive_id || item.receiveId,
           studentNo,
           studentName,
           majorName,
           textbookName,
+          isbn: item.isbn || '',
+          subscriptionYear: item.subscriptionYear || item.subscription_year,
+          subscriptionSemester: item.subscriptionSemester || item.subscription_semester,
+          subscribeStatus: item.subscribeStatus || item.subscribe_status,
+          receiveStatus: item.receiveStatus || item.receive_status,
+          price: item.price,
+          discountPrice: item.discountPrice,
+          remark: item.remark,
         });
       } catch (e) {
         console.warn(`【处理账单失败】`, e);
