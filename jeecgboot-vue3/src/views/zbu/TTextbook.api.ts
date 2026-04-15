@@ -30,6 +30,13 @@ export const list = (params) =>
   defHttp.get({url: Api.list, params});
 
 /**
+ * 获取所有记录ID（用于全选）
+ * @param params 查询条件
+ */
+export const getAllIds = (params) =>
+  defHttp.get({url: '/zbu/tTextbook/getAllIds', params}, {isTransformResponse: false});
+
+/**
  * 删除单个
  */
 export const deleteOne = (params,handleSuccess) => {
@@ -49,8 +56,10 @@ export const batchDelete = (params, handleSuccess) => {
     okText: '确认',
     cancelText: '取消',
     onOk: () => {
-      return defHttp.delete({url: Api.deleteBatch, data: params}, {joinParamsToUrl: true}).then(() => {
-        handleSuccess();
+      return defHttp.post({url: Api.deleteBatch, data: params}, {isTransformResponse: false}).then((res) => {
+        if (res.success) {
+          handleSuccess();
+        }
       });
     }
   });

@@ -39,24 +39,31 @@ import org.springframework.web.servlet.ModelAndView;
 import com.alibaba.fastjson.JSON;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import io.swagger.v3.oas.annotations.Operation;
+import org.apache.poi.ss.usermodel.Sheet;
+import org.apache.poi.ss.usermodel.Workbook;
+import org.apache.poi.ss.usermodel.WorkbookFactory;
+import org.jeecgframework.poi.excel.ExcelImportUtil;
+import org.jeecgframework.poi.excel.entity.ImportParams;
 import org.jeecg.common.aspect.annotation.AutoLog;
 import org.apache.shiro.authz.annotation.RequiresPermissions;
- /**
+import java.util.NoSuchElementException;
+
+/**
  * @Description: 教材表
  * @Author: jeecg-boot
- * @Date:   2026-01-19
+ * @Date: 2026-01-19
  * @Version: V1.0
  */
-@Tag(name="教材表")
+@Tag(name = "教材表")
 @RestController
 @RequestMapping("/zbu/tTextbook")
 @Slf4j
 public class TTextbookController extends JeecgController<TTextbook, ITTextbookService> {
 	@Autowired
 	private ITTextbookService tTextbookService;
-	 @Autowired
-	 private IStudentBillService studentBillService;
-	
+	@Autowired
+	private IStudentBillService studentBillService;
+
 	/**
 	 * 分页列表查询
 	 *
@@ -66,34 +73,34 @@ public class TTextbookController extends JeecgController<TTextbook, ITTextbookSe
 	 * @param req
 	 * @return
 	 */
-	//@AutoLog(value = "教材表-分页列表查询")
-	@Operation(summary="教材表-分页列表查询")
+	// @AutoLog(value = "教材表-分页列表查询")
+	@Operation(summary = "教材表-分页列表查询")
 	@GetMapping(value = "/list")
 	public Result<IPage<TTextbook>> queryPageList(TTextbook tTextbook,
-								   @RequestParam(name="pageNo", defaultValue="1") Integer pageNo,
-								   @RequestParam(name="pageSize", defaultValue="10") Integer pageSize,
-								   HttpServletRequest req) {
+												  @RequestParam(name = "pageNo", defaultValue = "1") Integer pageNo,
+												  @RequestParam(name = "pageSize", defaultValue = "10") Integer pageSize,
+												  HttpServletRequest req) {
 
-
-        // 自定义查询规则
-        Map<String, QueryRuleEnum> customeRuleMap = new HashMap<>();
-        // 自定义多选的查询规则为：LIKE_WITH_OR
-        customeRuleMap.put("enableSemester", QueryRuleEnum.LIKE_WITH_OR);
-        customeRuleMap.put("status", QueryRuleEnum.LIKE_WITH_OR);
-        QueryWrapper<TTextbook> queryWrapper = QueryGenerator.initQueryWrapper(tTextbook, req.getParameterMap(),customeRuleMap);
+		// 自定义查询规则
+		Map<String, QueryRuleEnum> customeRuleMap = new HashMap<>();
+		// 自定义多选的查询规则为：LIKE_WITH_OR
+		customeRuleMap.put("enableSemester", QueryRuleEnum.LIKE_WITH_OR);
+		customeRuleMap.put("status", QueryRuleEnum.LIKE_WITH_OR);
+		QueryWrapper<TTextbook> queryWrapper = QueryGenerator.initQueryWrapper(tTextbook, req.getParameterMap(),
+				customeRuleMap);
 		Page<TTextbook> page = new Page<TTextbook>(pageNo, pageSize);
 		IPage<TTextbook> pageList = tTextbookService.page(page, queryWrapper);
 		return Result.OK(pageList);
 	}
-	
+
 	/**
-	 *   添加
+	 * 添加
 	 *
 	 * @param tTextbook
 	 * @return
 	 */
 	@AutoLog(value = "教材表-添加")
-	@Operation(summary="教材表-添加")
+	@Operation(summary = "教材表-添加")
 	@RequiresPermissions("zbu:t_textbook:add")
 	@PostMapping(value = "/add")
 	public Result<String> add(@RequestBody TTextbook tTextbook) {
@@ -101,17 +108,17 @@ public class TTextbookController extends JeecgController<TTextbook, ITTextbookSe
 
 		return Result.OK("添加成功！");
 	}
-	
+
 	/**
-	 *  编辑
+	 * 编辑
 	 *
 	 * @param tTextbook
 	 * @return
 	 */
 	@AutoLog(value = "教材表-编辑")
-	@Operation(summary="教材表-编辑")
+	@Operation(summary = "教材表-编辑")
 	@RequiresPermissions("zbu:t_textbook:edit")
-	@RequestMapping(value = "/edit", method = {RequestMethod.PUT,RequestMethod.POST})
+	@RequestMapping(value = "/edit", method = { RequestMethod.PUT, RequestMethod.POST })
 	public Result<String> edit(@RequestBody TTextbook tTextbook) {
 		TTextbook oldTextbook = tTextbookService.getById(tTextbook.getId());
 		boolean priceChanged = false;
@@ -131,230 +138,404 @@ public class TTextbookController extends JeecgController<TTextbook, ITTextbookSe
 		}
 		return Result.OK("编辑成功!");
 	}
-	
+
 	/**
-	 *   通过id删除
+	 * 通过id删除
 	 *
 	 * @param id
 	 * @return
 	 */
 	@AutoLog(value = "教材表-通过id删除")
-	@Operation(summary="教材表-通过id删除")
+	@Operation(summary = "教材表-通过id删除")
 	@RequiresPermissions("zbu:t_textbook:delete")
 	@DeleteMapping(value = "/delete")
-	public Result<String> delete(@RequestParam(name="id",required=true) String id) {
+	public Result<String> delete(@RequestParam(name = "id", required = true) String id) {
 		tTextbookService.removeById(id);
 		return Result.OK("删除成功!");
 	}
-	
+
 	/**
-	 *  批量删除
+	 * 批量删除
 	 *
 	 * @param ids
 	 * @return
 	 */
 	@AutoLog(value = "教材表-批量删除")
-	@Operation(summary="教材表-批量删除")
+	@Operation(summary = "教材表-批量删除")
 	@RequiresPermissions("zbu:t_textbook:deleteBatch")
-	@DeleteMapping(value = "/deleteBatch")
-	public Result<String> deleteBatch(@RequestParam(name="ids",required=true) String ids) {
-		this.tTextbookService.removeByIds(Arrays.asList(ids.split(",")));
+	@PostMapping(value = "/deleteBatch")
+	public Result<String> deleteBatch(@RequestBody Map<String, Object> params) {
+		Object idsObj = params.get("ids");
+		if (idsObj == null) {
+			return Result.error("删除失败：未提供要删除的记录ID");
+		}
+		List<String> ids;
+		if (idsObj instanceof String) {
+			ids = Arrays.asList(((String) idsObj).split(","));
+		} else if (idsObj instanceof List) {
+			ids = (List<String>) idsObj;
+		} else {
+			return Result.error("删除失败：参数格式错误");
+		}
+		this.tTextbookService.removeByIds(ids);
 		return Result.OK("批量删除成功!");
 	}
-	
+
+	/**
+	 * 获取所有记录ID（用于全选）
+	 *
+	 * @param tTextbook 查询条件
+	 * @return ID列表
+	 */
+	@Operation(summary = "教材表-获取所有ID")
+	@GetMapping(value = "/getAllIds")
+	public Result<List<String>> getAllIds(TTextbook tTextbook) {
+		QueryWrapper<TTextbook> queryWrapper = new QueryWrapper<>();
+
+		if (oConvertUtils.isNotEmpty(tTextbook.getIsbn())) {
+			String isbn = tTextbook.getIsbn().replace("*", "%");
+			queryWrapper.like("isbn", isbn);
+		}
+		if (oConvertUtils.isNotEmpty(tTextbook.getTextbookName())) {
+			String name = tTextbook.getTextbookName().replace("*", "%");
+			queryWrapper.like("textbook_name", name);
+		}
+		if (oConvertUtils.isNotEmpty(tTextbook.getEnableYear())) {
+			queryWrapper.eq("enable_year", tTextbook.getEnableYear());
+		}
+		if (oConvertUtils.isNotEmpty(tTextbook.getEnableSemester())) {
+			queryWrapper.eq("enable_semester", tTextbook.getEnableSemester());
+		}
+		if (oConvertUtils.isNotEmpty(tTextbook.getStatus())) {
+			queryWrapper.eq("status", tTextbook.getStatus());
+		}
+		if (oConvertUtils.isNotEmpty(tTextbook.getAuthor())) {
+			String author = tTextbook.getAuthor().replace("*", "%");
+			queryWrapper.like("author", author);
+		}
+		if (oConvertUtils.isNotEmpty(tTextbook.getPublisher())) {
+			String publisher = tTextbook.getPublisher().replace("*", "%");
+			queryWrapper.like("publisher", publisher);
+		}
+
+		queryWrapper.select("id");
+		List<TTextbook> list = tTextbookService.list(queryWrapper);
+		List<String> ids = list.stream().map(TTextbook::getId).collect(Collectors.toList());
+		return Result.OK(ids);
+	}
+
 	/**
 	 * 通过id查询
 	 *
 	 * @param id
 	 * @return
 	 */
-	//@AutoLog(value = "教材表-通过id查询")
-	@Operation(summary="教材表-通过id查询")
+	// @AutoLog(value = "教材表-通过id查询")
+	@Operation(summary = "教材表-通过id查询")
 	@GetMapping(value = "/queryById")
-	public Result<TTextbook> queryById(@RequestParam(name="id",required=true) String id) {
+	public Result<TTextbook> queryById(@RequestParam(name = "id", required = true) String id) {
 		TTextbook tTextbook = tTextbookService.getById(id);
-		if(tTextbook==null) {
+		if (tTextbook == null) {
 			return Result.error("未找到对应数据");
 		}
 		return Result.OK(tTextbook);
 	}
 
-    /**
-    * 导出excel
-    *
-    * @param request
-    * @param tTextbook
-    */
-    @RequiresPermissions("zbu:t_textbook:exportXls")
-    @RequestMapping(value = "/exportXls")
-    public ModelAndView exportXls(HttpServletRequest request, TTextbook tTextbook) {
-        return super.exportXls(request, tTextbook, TTextbook.class, "教材表");
-    }
+	/**
+	 * 导出excel
+	 *
+	 * @param request
+	 * @param tTextbook
+	 */
+	@RequiresPermissions("zbu:t_textbook:exportXls")
+	@RequestMapping(value = "/exportXls")
+	public ModelAndView exportXls(HttpServletRequest request, TTextbook tTextbook) {
+		return super.exportXls(request, tTextbook, TTextbook.class, "教材表");
+	}
 
-    /**
-      * 通过excel导入数据
-    *
-    * @param request
-    * @param response
-    * @return
-    */
-    @RequiresPermissions("zbu:t_textbook:importExcel")
-    @RequestMapping(value = "/importExcel", method = RequestMethod.POST)
-    public Result<?> importExcel(HttpServletRequest request, HttpServletResponse response) {
-        return super.importExcel(request, response, TTextbook.class);
-    }
+	/**
+	 * 通过excel导入数据
+	 *
+	 * @param request
+	 * @param response
+	 * @return
+	 */
+	@RequiresPermissions("zbu:t_textbook:importExcel")
+	@RequestMapping(value = "/importExcel", method = RequestMethod.POST)
+	public Result<?> importExcel(HttpServletRequest request, HttpServletResponse response) {
+		try {
+			MultipartHttpServletRequest multipartRequest = (MultipartHttpServletRequest) request;
+			Map<String, MultipartFile> fileMap = multipartRequest.getFileMap();
+			if (fileMap.isEmpty()) {
+				return Result.error("请选择要导入的Excel文件！");
+			}
 
+			ImportParams importParams = new ImportParams();
+			importParams.setTitleRows(2);
+			importParams.setHeadRows(1);
+			importParams.setNeedSave(false);
 
-	 /**
-	  *  批量修改
-	  *
-	  * @param params 包含ids列表和要修改的字段
-	  * @return
-	  */
-	 @AutoLog(value = "教材表-批量修改")
-	 @Operation(summary="教材表-批量修改")
-	 @PostMapping(value = "/editBatch")
-	 public Result<String> editBatch(@RequestBody Map<String, Object> params) {
-		 try {
-			 // 1. 基础参数校验：ID列表
-			 String idsStr = (String) params.get("ids");
-			 if (oConvertUtils.isEmpty(idsStr)) {
-				 return Result.error("批量修改失败：未选择要修改的记录ID");
-			 }
-			 List<String> ids = Arrays.asList(idsStr.split(","));
-			 if (ids.isEmpty()) {
-				 return Result.error("批量修改失败：ID列表不能为空");
-			 }
+			List<TTextbook> validList = new ArrayList<>();
+			List<String> failMsgList = new ArrayList<>();
+			int totalRow = 0;
 
-			 // 2. 定义【仅允许批量修改的字段白名单】（驼峰名，对应实体类）
-			 List<String> ALLOW_UPDATE_FIELDS = Arrays.asList("sectionCode", "businessCode", "discount", "price");
-			 Map<String, Object> updateFields = new HashMap<>();
+			for (Map.Entry<String, MultipartFile> entry : fileMap.entrySet()) {
+				MultipartFile file = entry.getValue();
+				if (file.isEmpty()) {
+					continue;
+				}
 
-			 // 3. 过滤参数：仅提取白名单内的字段，忽略其他所有字段
-			 for (String allowField : ALLOW_UPDATE_FIELDS) {
-				 Object value = params.get(allowField);
-				 // 字段值非空才加入修改（空值/空字符串不处理）
-				 if (value != null && !oConvertUtils.isEmpty(value.toString().trim())) {
-					 // 特殊处理：折扣(discount) 转换为BigDecimal并校验
-					 if ("discount".equals(allowField)) {
-						 try {
-							 // 转换为BigDecimal（支持小数，如0.85、1.0）
-							 BigDecimal discount = new BigDecimal(value.toString().trim());
-							 // 折扣校验：必须大于0，且不大于1（0 < discount ≤ 1）
-							 if (discount.compareTo(BigDecimal.ZERO) <= 0 || discount.compareTo(new BigDecimal("1")) > 0) {
-								 return Result.error("批量修改失败：折扣必须是0-1之间的小数（如0.85=85折，1=原价）");
-							 }
-							 updateFields.put(allowField, discount);
-						 } catch (NumberFormatException e) {
-							 return Result.error("批量修改失败：折扣必须是有效数字（如0.85、1.0）");
-						 }
-					 } else if ("price".equals(allowField)) {
-						 try {
-							 BigDecimal price = new BigDecimal(value.toString().trim());
-							 if (price.compareTo(BigDecimal.ZERO) < 0) {
-								 return Result.error("批量修改失败：价格不能为负数");
-							 }
-							 updateFields.put(allowField, price);
-						 } catch (NumberFormatException e) {
-							 return Result.error("批量修改失败：价格必须是有效数字");
-						 }
-					 } else {
-						 // 标段/编号：直接存字符串
-						 updateFields.put(allowField, value.toString().trim());
-					 }
-				 }
-			 }
+				byte[] fileBytes;
+				try {
+					fileBytes = file.getBytes();
+				} catch (Exception e) {
+					failMsgList.add("读取文件失败：" + e.getMessage());
+					continue;
+				}
 
-			 // 4. 校验：是否选择了要修改的字段
-			 if (updateFields.isEmpty()) {
-				 return Result.error("批量修改失败：仅支持修改【标段(sectionCode)、编号(businessCode)、折扣(discount)、价格(price)】，请传入有效字段值");
-			 }
+				try (Workbook workbook = WorkbookFactory.create(new java.io.ByteArrayInputStream(fileBytes))) {
+					if (workbook.getNumberOfSheets() == 0) {
+						failMsgList.add("Excel文件没有工作表，跳过");
+						continue;
+					}
+					Sheet firstSheet = workbook.getSheetAt(0);
+					if (firstSheet == null || firstSheet.getPhysicalNumberOfRows() <= 1) {
+						failMsgList.add("Excel内容为空或只有表头，跳过");
+						continue;
+					}
+				} catch (Exception e) {
+					failMsgList.add("Excel文件格式无效：" + e.getMessage());
+					continue;
+				}
 
-			 // 5. 构造批量更新条件，执行修改
-			 UpdateWrapper<TTextbook> updateWrapper = new UpdateWrapper<>();
-			 updateWrapper.in("id", ids); // 仅修改选中ID的记录
+				List<TTextbook> tempList;
+				try {
+					tempList = ExcelImportUtil.importExcel(
+							new java.io.ByteArrayInputStream(fileBytes),
+							TTextbook.class,
+							importParams);
+				} catch (NoSuchElementException e) {
+					log.error("Excel解析失败，可能是空文件或格式问题", e);
+					return Result.error("导入失败：Excel文件内容为空或格式无效，请检查文件是否正确");
+				}
 
-			 // 核心修复：驼峰字段名转数据库下划线字段名，再设置到UpdateWrapper
-			 for (Map.Entry<String, Object> entry : updateFields.entrySet()) {
-				 String camelField = entry.getKey();
-				 String dbField = camelToUnderline(camelField); // 驼峰转下划线
-				 updateWrapper.set(dbField, entry.getValue()); // 用数据库字段名设置
-			 }
+				for (int i = 0; i < tempList.size(); i++) {
+					totalRow = i + 2;
+					TTextbook textbook = tempList.get(i);
 
-			 updateWrapper.set("update_time", new Date());
+					String isbn = textbook.getIsbn();
+					if (oConvertUtils.isEmpty(isbn) || isbn.trim().isEmpty()) {
+						failMsgList.add("第" + totalRow + "行：ISBN为空，跳过导入");
+						continue;
+					}
+					textbook.setIsbn(isbn.trim());
 
-			 boolean priceOrDiscountChanged = updateFields.containsKey("price") || updateFields.containsKey("discount");
-			 boolean updateResult = tTextbookService.update(updateWrapper);
-			 if (updateResult) {
-				 log.info("教材表批量修改成功，修改ID：{}，修改字段：{}", idsStr, updateFields);
-				 if (priceOrDiscountChanged) {
-					 for (String textbookId : ids) {
-						 TTextbook textbook = tTextbookService.getById(textbookId);
-						 if (textbook != null) {
-							 syncBillPriceByTextbook(textbookId, textbook);
-						 }
-					 }
-					 log.info("教材价格/折扣修改后，已同步更新相关个人账单");
-				 }
-				 return Result.OK("批量修改成功！共修改" + ids.size() + "条记录，修改字段：" + updateFields.keySet());
-			 } else {
-				 return Result.error("批量修改失败：无记录被更新（请检查ID是否有效）");
-			 }
+					String enableYear = textbook.getEnableYear();
+					if (oConvertUtils.isEmpty(enableYear) || enableYear.trim().isEmpty()) {
+						failMsgList.add("第" + totalRow + "行：ISBN【" + isbn + "】的启用学年为空，跳过导入");
+						continue;
+					}
+					textbook.setEnableYear(enableYear.trim());
 
-		 } catch (Exception e) {
-			 log.error("教材表批量修改异常", e);
-			 return Result.error("批量修改失败：" + e.getMessage());
-		 }
-	 }
+					String enableSemester = textbook.getEnableSemester();
+					if (oConvertUtils.isEmpty(enableSemester) || enableSemester.trim().isEmpty()) {
+						failMsgList.add("第" + totalRow + "行：ISBN【" + isbn + "】的启用学期为空，跳过导入");
+						continue;
+					}
+					textbook.setEnableSemester(enableSemester.trim());
 
-	 /**
-	  * 工具方法：驼峰命名转下划线命名
-	  * @param camelStr 驼峰字符串
-	  * @return 下划线字符串
-	  */
-	 private String camelToUnderline(String camelStr) {
-		 if (StringUtils.isBlank(camelStr)) {
-			 return camelStr;
-		 }
-		 // 第一个字符小写
-		 camelStr = String.valueOf(camelStr.charAt(0)).toLowerCase() + camelStr.substring(1);
-		 // 遍历字符，大写字母前加下划线，再转小写
-		 StringBuilder sb = new StringBuilder();
-		 for (char c : camelStr.toCharArray()) {
-			 if (Character.isUpperCase(c)) {
-				 sb.append("_");
-				 sb.append(Character.toLowerCase(c));
-			 } else {
-				 sb.append(c);
-			 }
-		 }
-		 return sb.toString();
-	 }
+					QueryWrapper<TTextbook> wrapper = new QueryWrapper<>();
+					wrapper.eq("isbn", textbook.getIsbn());
+					wrapper.eq("enable_year", textbook.getEnableYear());
+					wrapper.eq("enable_semester", textbook.getEnableSemester());
+					if (tTextbookService.count(wrapper) > 0) {
+						failMsgList.add("第" + totalRow + "行：ISBN【" + isbn + "】+启用学年【" + enableYear + "】+启用学期【"
+								+ enableSemester + "】已存在，跳过导入");
+						continue;
+					}
 
-	 private void syncBillPriceByTextbook(String textbookId, TTextbook textbook) {
-		 try {
-			 BigDecimal price = textbook.getPrice() != null ? textbook.getPrice() : BigDecimal.ZERO;
-			 BigDecimal discount = textbook.getDiscount() != null ? textbook.getDiscount() : new BigDecimal("1");
-			 BigDecimal discountPrice = price.multiply(discount).setScale(2, java.math.RoundingMode.HALF_UP);
+					validList.add(textbook);
+				}
+			}
 
-			 UpdateWrapper<StudentBill> billUpdateWrapper = new UpdateWrapper<>();
-			 billUpdateWrapper.eq("textbook_name", textbook.getTextbookName());
-			 billUpdateWrapper.set("price", price);
-			 billUpdateWrapper.set("discount_price", discountPrice);
-			 billUpdateWrapper.set("update_time", new Date());
+			if (!validList.isEmpty()) {
+				tTextbookService.saveBatch(validList);
+			}
 
-			 boolean updateSuccess = studentBillService.update(billUpdateWrapper);
-			 if (updateSuccess) {
-				 log.info("【同步账单价格】教材ID={}，教材名称={}，新定价={}，新折后价={}，已同步更新相关个人账单",
-						 textbookId, textbook.getTextbookName(), price, discountPrice);
-			 } else {
-				 log.info("【同步账单价格】教材ID={}，教材名称={}，无匹配的个人账单需要更新",
-						 textbookId, textbook.getTextbookName());
-			 }
-		 } catch (Exception e) {
-			 log.error("【同步账单价格失败】教材ID={}，错误：{}", textbookId, e.getMessage());
-		 }
-	 }
+			StringBuilder result = new StringBuilder();
+			result.append("导入完成！成功导入【").append(validList.size()).append("】条有效数据");
+			if (!failMsgList.isEmpty()) {
+				result.append("；失败【").append(failMsgList.size()).append("】条数据，原因：");
+				List<String> showFailMsg = failMsgList.size() > 10 ? failMsgList.subList(0, 10) : failMsgList;
+				result.append(String.join("；", showFailMsg));
+				if (failMsgList.size() > 10) {
+					result.append("；还有").append(failMsgList.size() - 10).append("条失败信息未展示");
+				}
+			}
 
+			if (validList.isEmpty()) {
+				return Result.error(result.toString());
+			} else {
+				return Result.OK(result.toString());
+			}
+
+		} catch (Exception e) {
+			log.error("Excel导入教材数据失败", e);
+			return Result.error("导入失败：" + e.getMessage());
+		}
+	}
+
+	/**
+	 * 批量修改
+	 *
+	 * @param params 包含ids列表和要修改的字段
+	 * @return
+	 */
+	@AutoLog(value = "教材表-批量修改")
+	@Operation(summary = "教材表-批量修改")
+	@PostMapping(value = "/editBatch")
+	public Result<String> editBatch(@RequestBody Map<String, Object> params) {
+		try {
+			// 1. 基础参数校验：ID列表
+			String idsStr = (String) params.get("ids");
+			if (oConvertUtils.isEmpty(idsStr)) {
+				return Result.error("批量修改失败：未选择要修改的记录ID");
+			}
+			List<String> ids = Arrays.asList(idsStr.split(","));
+			if (ids.isEmpty()) {
+				return Result.error("批量修改失败：ID列表不能为空");
+			}
+
+			// 2. 定义【仅允许批量修改的字段白名单】（驼峰名，对应实体类）
+			List<String> ALLOW_UPDATE_FIELDS = Arrays.asList("sectionCode", "businessCode", "discount", "price");
+			Map<String, Object> updateFields = new HashMap<>();
+
+			// 3. 过滤参数：仅提取白名单内的字段，忽略其他所有字段
+			for (String allowField : ALLOW_UPDATE_FIELDS) {
+				Object value = params.get(allowField);
+				// 字段值非空才加入修改（空值/空字符串不处理）
+				if (value != null && !oConvertUtils.isEmpty(value.toString().trim())) {
+					// 特殊处理：折扣(discount) 转换为BigDecimal并校验
+					if ("discount".equals(allowField)) {
+						try {
+							// 转换为BigDecimal（支持小数，如0.85、1.0）
+							BigDecimal discount = new BigDecimal(value.toString().trim());
+							// 折扣校验：必须大于0，且不大于1（0 < discount ≤ 1）
+							if (discount.compareTo(BigDecimal.ZERO) <= 0
+									|| discount.compareTo(new BigDecimal("1")) > 0) {
+								return Result.error("批量修改失败：折扣必须是0-1之间的小数（如0.85=85折，1=原价）");
+							}
+							updateFields.put(allowField, discount);
+						} catch (NumberFormatException e) {
+							return Result.error("批量修改失败：折扣必须是有效数字（如0.85、1.0）");
+						}
+					} else if ("price".equals(allowField)) {
+						try {
+							BigDecimal price = new BigDecimal(value.toString().trim());
+							if (price.compareTo(BigDecimal.ZERO) < 0) {
+								return Result.error("批量修改失败：价格不能为负数");
+							}
+							updateFields.put(allowField, price);
+						} catch (NumberFormatException e) {
+							return Result.error("批量修改失败：价格必须是有效数字");
+						}
+					} else {
+						// 标段/编号：直接存字符串
+						updateFields.put(allowField, value.toString().trim());
+					}
+				}
+			}
+
+			// 4. 校验：是否选择了要修改的字段
+			if (updateFields.isEmpty()) {
+				return Result.error("批量修改失败：仅支持修改【标段(sectionCode)、编号(businessCode)、折扣(discount)、价格(price)】，请传入有效字段值");
+			}
+
+			// 5. 构造批量更新条件，执行修改
+			UpdateWrapper<TTextbook> updateWrapper = new UpdateWrapper<>();
+			updateWrapper.in("id", ids); // 仅修改选中ID的记录
+
+			// 核心修复：驼峰字段名转数据库下划线字段名，再设置到UpdateWrapper
+			for (Map.Entry<String, Object> entry : updateFields.entrySet()) {
+				String camelField = entry.getKey();
+				String dbField = camelToUnderline(camelField); // 驼峰转下划线
+				updateWrapper.set(dbField, entry.getValue()); // 用数据库字段名设置
+			}
+
+			updateWrapper.set("update_time", new Date());
+
+			boolean priceOrDiscountChanged = updateFields.containsKey("price") || updateFields.containsKey("discount");
+			boolean updateResult = tTextbookService.update(updateWrapper);
+			if (updateResult) {
+				log.info("教材表批量修改成功，修改ID：{}，修改字段：{}", idsStr, updateFields);
+				if (priceOrDiscountChanged) {
+					for (String textbookId : ids) {
+						TTextbook textbook = tTextbookService.getById(textbookId);
+						if (textbook != null) {
+							syncBillPriceByTextbook(textbookId, textbook);
+						}
+					}
+					log.info("教材价格/折扣修改后，已同步更新相关个人账单");
+				}
+				return Result.OK("批量修改成功！共修改" + ids.size() + "条记录，修改字段：" + updateFields.keySet());
+			} else {
+				return Result.error("批量修改失败：无记录被更新（请检查ID是否有效）");
+			}
+
+		} catch (Exception e) {
+			log.error("教材表批量修改异常", e);
+			return Result.error("批量修改失败：" + e.getMessage());
+		}
+	}
+
+	/**
+	 * 工具方法：驼峰命名转下划线命名
+	 *
+	 * @param camelStr 驼峰字符串
+	 * @return 下划线字符串
+	 */
+	private String camelToUnderline(String camelStr) {
+		if (StringUtils.isBlank(camelStr)) {
+			return camelStr;
+		}
+		// 第一个字符小写
+		camelStr = String.valueOf(camelStr.charAt(0)).toLowerCase() + camelStr.substring(1);
+		// 遍历字符，大写字母前加下划线，再转小写
+		StringBuilder sb = new StringBuilder();
+		for (char c : camelStr.toCharArray()) {
+			if (Character.isUpperCase(c)) {
+				sb.append("_");
+				sb.append(Character.toLowerCase(c));
+			} else {
+				sb.append(c);
+			}
+		}
+		return sb.toString();
+	}
+
+	private void syncBillPriceByTextbook(String textbookId, TTextbook textbook) {
+		try {
+			BigDecimal price = textbook.getPrice() != null ? textbook.getPrice() : BigDecimal.ZERO;
+			BigDecimal discount = textbook.getDiscount() != null ? textbook.getDiscount() : new BigDecimal("1");
+			BigDecimal discountPrice = price.multiply(discount).setScale(2, java.math.RoundingMode.HALF_UP);
+
+			UpdateWrapper<StudentBill> billUpdateWrapper = new UpdateWrapper<>();
+			billUpdateWrapper.eq("textbook_name", textbook.getTextbookName());
+			billUpdateWrapper.set("price", price);
+			billUpdateWrapper.set("discount_price", discountPrice);
+			billUpdateWrapper.set("update_time", new Date());
+
+			boolean updateSuccess = studentBillService.update(billUpdateWrapper);
+			if (updateSuccess) {
+				log.info("【同步账单价格】教材ID={}，教材名称={}，新定价={}，新折后价={}，已同步更新相关个人账单",
+						textbookId, textbook.getTextbookName(), price, discountPrice);
+			} else {
+				log.info("【同步账单价格】教材ID={}，教材名称={}，无匹配的个人账单需要更新",
+						textbookId, textbook.getTextbookName());
+			}
+		} catch (Exception e) {
+			log.error("【同步账单价格失败】教材ID={}，错误：{}", textbookId, e.getMessage());
+		}
+	}
 
 }

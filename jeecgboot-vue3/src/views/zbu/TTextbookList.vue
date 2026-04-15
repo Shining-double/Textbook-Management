@@ -9,6 +9,9 @@
           <a-button type="primary" v-auth="'zbu:t_textbook:exportXls'" preIcon="ant-design:export-outlined" @click="onExportXls" class="ml-2"> 导出</a-button>
           <j-upload-button type="primary" v-auth="'zbu:t_textbook:importExcel'" preIcon="ant-design:import-outlined" @click="onImportXls" class="ml-2">导入</j-upload-button>
 
+          <a-button type="primary" @click="handleSelectAll" class="ml-2">全选</a-button>
+          <a-button type="primary" @click="handleClearSelect" class="ml-2" v-if="selectedRowKeys.length > 0">清空选择</a-button>
+
           <a-dropdown v-if="selectedRowKeys.length > 0" class="ml-2">
             <template #overlay>
               <a-menu>
@@ -24,7 +27,7 @@
           </a-dropdown>
 
           <!-- 高级查询 -->
-<!--          <super-query :config="superQueryConfig" @search="handleSuperQuery" class="ml-2 flex-1 min-w-[200px]" />-->
+          <!--          <super-query :config="superQueryConfig" @search="handleSuperQuery" class="ml-2 flex-1 min-w-[200px]" />-->
 
           <!-- 批量修改按钮 -->
           <a-button
@@ -57,30 +60,30 @@
       cancel-text="取消"
       @ok="doBatchEdit"
       width="500px"
-    :confirm-loading="batchEditLoading"
+      :confirm-loading="batchEditLoading"
     >
-    <div class="batch-edit-form">
-      <div class="form-item">
-        <label class="form-label">标段：</label>
-        <input v-model="batchEditForm.sectionCode" placeholder="请输入标段（选填）" class="form-input" />
+      <div class="batch-edit-form">
+        <div class="form-item">
+          <label class="form-label">标段：</label>
+          <input v-model="batchEditForm.sectionCode" placeholder="请输入标段（选填）" class="form-input" />
+        </div>
+        <div class="form-item">
+          <label class="form-label">编号：</label>
+          <input v-model="batchEditForm.businessCode" placeholder="请输入编号（选填）" class="form-input" />
+        </div>
+        <div class="form-item">
+          <label class="form-label">折扣：</label>
+          <input
+            v-model="batchEditForm.discount"
+            placeholder="请输入折扣（如0.85=85折）"
+            class="form-input"
+            type="number"
+            min="0.01"
+            max="1"
+            step="0.01"
+          />
+        </div>
       </div>
-      <div class="form-item">
-        <label class="form-label">编号：</label>
-        <input v-model="batchEditForm.businessCode" placeholder="请输入编号（选填）" class="form-input" />
-      </div>
-      <div class="form-item">
-        <label class="form-label">折扣：</label>
-        <input
-          v-model="batchEditForm.discount"
-          placeholder="请输入折扣（如0.85=85折）"
-          class="form-input"
-          type="number"
-          min="0.01"
-          max="1"
-          step="0.01"
-        />
-      </div>
-    </div>
     </a-modal>
 
     <!-- 原有弹窗 -->
@@ -95,7 +98,7 @@ import { useModal } from '/@/components/Modal';
 import { useListPage } from '/@/hooks/system/useListPage'
 import TTextbookModal from './components/TTextbookModal.vue'
 import { columns, searchFormSchema, superQuerySchema } from './TTextbook.data';
-import { list, deleteOne, batchDelete, getImportUrl, getExportUrl, batchEdit } from './TTextbook.api';
+import { list, deleteOne, batchDelete, getImportUrl, getExportUrl, batchEdit, getAllIds } from './TTextbook.api';
 import { useMessage } from '/@/hooks/web/useMessage';
 import { getDateByPicker } from '/@/utils';
 
@@ -157,7 +160,44 @@ const { tableContext, onExportXls, onImportXls } = useListPage({
   },
 })
 
-const [registerTable, { reload }, { rowSelection, selectedRowKeys }] = tableContext;
+const [registerTable, { reload, getDataSource, getForm }, { rowSelection, selectedRowKeys }] = tableContext;
+
+// 全选所有搜索结果
+async function handleSelectAll() {
+  try {
+    const form = getForm();
+    const formValues = form?.getFieldsValue() || {};
+    console.log('表单值:', formValues);
+    console.log('queryParam:', queryParam);
+
+    const params = { ...queryParam, ...formValues };
+    console.log('合并参数:', params);
+    params.pageNo = 1;
+    params.pageSize = 999999999;
+    console.log('最终参数:', params);
+
+    const res = await getAllIds(params);
+    console.log('API响应:', res);
+
+    if (res.success && Array.isArray(res.result)) {
+      selectedRowKeys.value = res.result;
+      createMessage.success('已选中 ' + res.result.length + ' 条记录');
+    } else if (res.success) {
+      selectedRowKeys.value = [];
+      createMessage.warning('没有找到任何记录');
+    } else {
+      createMessage.warning('获取记录失败: ' + (res.message || '未知错误'));
+    }
+  } catch (err: any) {
+    console.error('错误:', err);
+    createMessage.error('获取记录失败: ' + (err.message || '未知错误'));
+  }
+}
+
+// 清空选择
+function handleClearSelect() {
+  selectedRowKeys.value = [];
+}
 
 // 高级查询配置
 const superQueryConfig = reactive(superQuerySchema);
