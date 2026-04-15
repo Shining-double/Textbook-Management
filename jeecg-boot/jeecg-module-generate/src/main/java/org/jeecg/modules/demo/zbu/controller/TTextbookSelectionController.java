@@ -22,6 +22,7 @@ import org.jeecgframework.poi.excel.ExcelImportUtil;
 import org.jeecgframework.poi.excel.entity.ImportParams;
 import org.jeecg.common.system.base.controller.JeecgController;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
@@ -60,6 +61,8 @@ public class TTextbookSelectionController extends JeecgController<TTextbookSelec
 	private IStudentBillService tStudentBillService;
 	@Autowired
 	private StudentAllBillSummaryController studentAllBillSummaryController;
+	@Autowired
+	private JdbcTemplate jdbcTemplate;
 
 
 	/**
@@ -71,24 +74,82 @@ public class TTextbookSelectionController extends JeecgController<TTextbookSelec
 	 * @param req
 	 * @return
 	 */
-	//@AutoLog(value = "教材选用表-分页列表查询")
 	@Operation(summary = "教材选用表-分页列表查询")
 	@GetMapping(value = "/list")
-	public Result<IPage<TTextbookSelection>> queryPageList(TTextbookSelection tTextbookSelection,
-														   @RequestParam(name = "pageNo", defaultValue = "1") Integer pageNo,
-														   @RequestParam(name = "pageSize", defaultValue = "10") Integer pageSize,
-														   HttpServletRequest req) {
+	public Result<?> queryPageList(TTextbookSelection tTextbookSelection,
+								   @RequestParam(name = "pageNo", defaultValue = "1") Integer pageNo,
+								   @RequestParam(name = "pageSize", defaultValue = "10") Integer pageSize,
+								   HttpServletRequest req) {
 
-		// 自定义查询规则
-		Map<String, QueryRuleEnum> customeRuleMap = new HashMap<>();
-		// 自定义多选的查询规则为：LIKE_WITH_OR
-		customeRuleMap.put("semester", QueryRuleEnum.LIKE_WITH_OR);
-		customeRuleMap.put("selectionStatus", QueryRuleEnum.LIKE_WITH_OR);
-		QueryWrapper<TTextbookSelection> queryWrapper = QueryGenerator.initQueryWrapper(tTextbookSelection,
-				req.getParameterMap(), customeRuleMap);
-		Page<TTextbookSelection> page = new Page<TTextbookSelection>(pageNo, pageSize);
-		IPage<TTextbookSelection> pageList = tTextbookSelectionService.page(page, queryWrapper);
-		return Result.OK(pageList);
+		// 构建基础SQL（使用视图）
+		String baseSql = "SELECT * FROM v_textbook_selection_with_isbn WHERE 1=1";
+		String countSql = "SELECT COUNT(*) FROM v_textbook_selection_with_isbn WHERE 1=1";
+
+		// 添加查询条件
+		if (oConvertUtils.isNotEmpty(tTextbookSelection.getMajorId())) {
+			baseSql += " AND majorId = '" + tTextbookSelection.getMajorId() + "'";
+			countSql += " AND majorId = '" + tTextbookSelection.getMajorId() + "'";
+		}
+		if (oConvertUtils.isNotEmpty(tTextbookSelection.getTextbookId())) {
+			baseSql += " AND textbookId = '" + tTextbookSelection.getTextbookId() + "'";
+			countSql += " AND textbookId = '" + tTextbookSelection.getTextbookId() + "'";
+		}
+		if (oConvertUtils.isNotEmpty(tTextbookSelection.getSchoolYear())) {
+			baseSql += " AND schoolYear = '" + tTextbookSelection.getSchoolYear() + "'";
+			countSql += " AND schoolYear = '" + tTextbookSelection.getSchoolYear() + "'";
+		}
+		if (oConvertUtils.isNotEmpty(tTextbookSelection.getSemester())) {
+			baseSql += " AND semester LIKE '%" + tTextbookSelection.getSemester() + "%'";
+			countSql += " AND semester LIKE '%" + tTextbookSelection.getSemester() + "%'";
+		}
+		if (oConvertUtils.isNotEmpty(tTextbookSelection.getSelectionStatus())) {
+			baseSql += " AND selectionStatus LIKE '%" + tTextbookSelection.getSelectionStatus() + "%'";
+			countSql += " AND selectionStatus LIKE '%" + tTextbookSelection.getSelectionStatus() + "%'";
+		}
+
+		// 添加排序
+		baseSql += " ORDER BY createTime DESC";
+
+		// 添加分页
+		int offset = (pageNo - 1) * pageSize;
+		baseSql += " LIMIT " + offset + ", " + pageSize;
+
+		log.info("【教材选用列表】执行SQL：{}", baseSql);
+
+		// 执行查询
+		List<Map<String, Object>> records = jdbcTemplate.queryForList(baseSql);
+
+		// 转换字典值
+		for (Map<String, Object> record : records) {
+			// 转换学期
+			String semester = (String) record.get("semester");
+			if ("1".equals(semester)) {
+				record.put("semester", "第一学期");
+			} else if ("2".equals(semester)) {
+				record.put("semester", "第二学期");
+			}
+			// 转换生效状态
+			String selectionStatus = (String) record.get("selectionStatus");
+			if ("1".equals(selectionStatus)) {
+				record.put("selectionStatus", "生效");
+			} else if ("0".equals(selectionStatus)) {
+				record.put("selectionStatus", "未生效");
+			}
+		}
+
+		// 获取总数
+		int total = jdbcTemplate.queryForObject(countSql, Integer.class);
+
+		// 构建分页结果
+		Map<String, Object> result = new HashMap<>();
+		result.put("records", records);
+		result.put("total", total);
+		result.put("size", pageSize);
+		result.put("current", pageNo);
+		result.put("pages", (total + pageSize - 1) / pageSize);
+
+		log.info("【教材选用列表】查询结果总数：{}", total);
+		return Result.OK(result);
 	}
 
 	/**

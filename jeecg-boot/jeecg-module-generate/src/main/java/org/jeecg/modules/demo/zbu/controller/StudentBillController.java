@@ -216,7 +216,75 @@ public class StudentBillController extends JeecgController<StudentBill, IStudent
 	}
 
 	/**
-	 * 分页列表查询
+	 * 账单汇总查询
+	 *
+	 * @param schoolYear 学年（可选）
+	 * @param semester 学期（可选）
+	 * @param pageNo 页码
+	 * @param pageSize 每页数量
+	 * @return 汇总列表
+	 */
+	@Operation(summary = "个人账单-汇总查询")
+	@GetMapping(value = "/summary")
+	public Result<?> querySummaryList(
+			@RequestParam(name = "schoolYear", required = false) String schoolYear,
+			@RequestParam(name = "semester", required = false) String semester,
+			@RequestParam(name = "pageNo", defaultValue = "1") Integer pageNo,
+			@RequestParam(name = "pageSize", defaultValue = "10") Integer pageSize) {
+
+		// 构建基础SQL（使用汇总视图）
+		String baseSql = "SELECT * FROM v_student_bill_summary WHERE 1=1";
+		String countSql = "SELECT COUNT(*) FROM v_student_bill_summary WHERE 1=1";
+
+		// 添加查询条件
+		if (oConvertUtils.isNotEmpty(schoolYear)) {
+			baseSql += " AND schoolYear = '" + schoolYear + "'";
+			countSql += " AND schoolYear = '" + schoolYear + "'";
+		}
+		if (oConvertUtils.isNotEmpty(semester)) {
+			baseSql += " AND semester = '" + semester + "'";
+			countSql += " AND semester = '" + semester + "'";
+		}
+
+		// 添加排序
+		baseSql += " ORDER BY studentId, schoolYear DESC, semester";
+
+		// 添加分页
+		int offset = (pageNo - 1) * pageSize;
+		baseSql += " LIMIT " + offset + ", " + pageSize;
+
+		log.info("【账单汇总】执行SQL：{}", baseSql);
+
+		// 执行查询
+		List<Map<String, Object>> records = jdbcTemplate.queryForList(baseSql);
+
+		// 转换字典值
+		for (Map<String, Object> record : records) {
+			// 转换学期
+			String sem = (String) record.get("semester");
+			if ("1".equals(sem)) {
+				record.put("semester", "第一学期");
+			} else if ("2".equals(sem)) {
+				record.put("semester", "第二学期");
+			}
+		}
+
+		// 获取总数
+		int total = jdbcTemplate.queryForObject(countSql, Integer.class);
+
+		// 构建分页结果
+		Map<String, Object> result = new HashMap<>();
+		result.put("records", records);
+		result.put("total", total);
+		result.put("size", pageSize);
+		result.put("current", pageNo);
+		result.put("pages", (total + pageSize - 1) / pageSize);
+
+		log.info("【账单汇总】查询结果总数：{}", total);
+		return Result.OK(result);
+	}
+
+	/**
 	 *
 	 * @param studentBill
 	 * @param pageNo
