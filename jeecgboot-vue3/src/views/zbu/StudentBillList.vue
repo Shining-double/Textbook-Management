@@ -451,6 +451,41 @@ function getDropDownAction(record) {
 </script>
 
 <style lang="less" scoped>
+:deep(.ant-input), :deep(.ant-picker), :deep(.ant-select-selector), :deep(.ant-input-number) {
+  width: 200px;
+  box-sizing: border-box;
+}
+
+:deep(.ant-select) {
+  width: 200px !important;
+  min-width: 200px !important;
+  flex: none !important;
+  display: inline-flex;
+  align-items: center;
+}
+
+:deep(.ant-select-selection-item) {
+  white-space: nowrap !important;
+}
+
+:deep(.ant-table-actions .ant-btn-primary) {padding: 0 8px;margin-right: 4px;}
+
+:deep(.ant-form-item-control-input-content) {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+:deep(.ant-form-item-label) {
+  width: 80px;
+  text-align: right;
+}
+
+:deep(.ant-form) {
+  padding: 8px 0;
+}
+
 .bill-table-container {
   position: relative;
   border: 1px solid #e8e8e8;
@@ -487,31 +522,8 @@ function getDropDownAction(record) {
   border-top: 2px solid #f0f0f0;
 }
 
-:deep(.ant-picker),:deep(.ant-input-number), :deep(.ant-input), :deep(.ant-select-selector) {
-  width: 100%;
-  height: 20px;
-  padding: 0 12px;
-}
-
-:deep(.ant-table-actions .ant-btn-primary) {
-  padding: 0 8px;
-  margin-right: 4px;
-}
-
 :deep(.ant-table-pagination) {
   margin: 16px !important;
-  text-align: right;
-}
-
-:deep(.ant-form-item-control-input-content) {
-  display: flex;
-  gap: 12px;
-  flex-wrap: wrap;
-  align-items: center;
-}
-
-:deep(.ant-form-item-label) {
-  width: 80px;
   text-align: right;
 }
 </style>

@@ -32,13 +32,14 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import io.swagger.v3.oas.annotations.Operation;
 import org.jeecg.common.aspect.annotation.AutoLog;
 import org.apache.shiro.authz.annotation.RequiresPermissions;
+
 /**
  * @Description: 教材选用表
  * @Author: jeecg-boot
- * @Date:   2026-01-19
+ * @Date: 2026-01-19
  * @Version: V1.0
  */
-@Tag(name="教材选用表")
+@Tag(name = "教材选用表")
 @RestController
 @RequestMapping("/zbu/tTextbookSelection")
 @Slf4j
@@ -63,7 +64,6 @@ public class TTextbookSelectionController extends JeecgController<TTextbookSelec
 	private StudentAllBillSummaryController studentAllBillSummaryController;
 	@Autowired
 	private JdbcTemplate jdbcTemplate;
-
 
 	/**
 	 * 分页列表查询
@@ -90,9 +90,29 @@ public class TTextbookSelectionController extends JeecgController<TTextbookSelec
 			baseSql += " AND majorId = '" + tTextbookSelection.getMajorId() + "'";
 			countSql += " AND majorId = '" + tTextbookSelection.getMajorId() + "'";
 		}
+		if (oConvertUtils.isNotEmpty(tTextbookSelection.getMajorName())) {
+			baseSql += " AND majorName LIKE '%" + tTextbookSelection.getMajorName() + "%'";
+			countSql += " AND majorName LIKE '%" + tTextbookSelection.getMajorName() + "%'";
+		}
+		if (oConvertUtils.isNotEmpty(tTextbookSelection.getClassId())) {
+			baseSql += " AND classId = '" + tTextbookSelection.getClassId() + "'";
+			countSql += " AND classId = '" + tTextbookSelection.getClassId() + "'";
+		}
+		if (oConvertUtils.isNotEmpty(tTextbookSelection.getClassName())) {
+			baseSql += " AND className LIKE '%" + tTextbookSelection.getClassName() + "%'";
+			countSql += " AND className LIKE '%" + tTextbookSelection.getClassName() + "%'";
+		}
 		if (oConvertUtils.isNotEmpty(tTextbookSelection.getTextbookId())) {
 			baseSql += " AND textbookId = '" + tTextbookSelection.getTextbookId() + "'";
 			countSql += " AND textbookId = '" + tTextbookSelection.getTextbookId() + "'";
+		}
+		if (oConvertUtils.isNotEmpty(tTextbookSelection.getTextbookName())) {
+			baseSql += " AND textbookName LIKE '%" + tTextbookSelection.getTextbookName() + "%'";
+			countSql += " AND textbookName LIKE '%" + tTextbookSelection.getTextbookName() + "%'";
+		}
+		if (oConvertUtils.isNotEmpty(tTextbookSelection.getIsbn())) {
+			baseSql += " AND isbn LIKE '%" + tTextbookSelection.getIsbn() + "%'";
+			countSql += " AND isbn LIKE '%" + tTextbookSelection.getIsbn() + "%'";
 		}
 		if (oConvertUtils.isNotEmpty(tTextbookSelection.getSchoolYear())) {
 			baseSql += " AND schoolYear = '" + tTextbookSelection.getSchoolYear() + "'";
@@ -617,7 +637,7 @@ public class TTextbookSelectionController extends JeecgController<TTextbookSelec
 	 * @param id
 	 * @return
 	 */
-	//@AutoLog(value = "教材选用表-通过id查询")
+	// @AutoLog(value = "教材选用表-通过id查询")
 	@Operation(summary = "教材选用表-通过id查询")
 	@GetMapping(value = "/queryById")
 	public Result<TTextbookSelection> queryById(@RequestParam(name = "id", required = true) String id) {
@@ -659,7 +679,7 @@ public class TTextbookSelectionController extends JeecgController<TTextbookSelec
 				MultipartFile file = entity.getValue();
 				ImportParams params = new ImportParams();
 				params.setTitleRows(2); // 2行标题行（第1、2行）
-				params.setHeadRows(1);  // 1行表头行（第3行）
+				params.setHeadRows(1); // 1行表头行（第3行）
 				params.setNeedSave(false);
 
 				// 1. 读取Excel数据
@@ -854,7 +874,6 @@ public class TTextbookSelectionController extends JeecgController<TTextbookSelec
 		}
 		return Result.error("导入失败！");
 	}
-
 
 	/**
 	 * 根据教材选用记录ID，为对应班级的所有学生生成征订记录+领取记录+个人账单记录

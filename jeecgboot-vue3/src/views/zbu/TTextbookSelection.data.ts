@@ -65,27 +65,28 @@ export const columns: BasicColumn[] = [
 export const searchFormSchema: FormSchema[] = [
   {
     label: "专业",
-    field: 'majorId',
+    field: 'majorName',
     component: 'Input',
-    //colProps: {span: 6},
   },
   {
     label: "班级",
-    field: 'classId',
+    field: 'className',
     component: 'Input',
-    //colProps: {span: 6},
   },
   {
     label: "教材",
-    field: 'textbookId',
+    field: 'textbookName',
     component: 'Input',
-    //colProps: {span: 6},
+  },
+  {
+    label: "ISBN",
+    field: 'isbn',
+    component: 'Input',
   },
   {
     label: "学年",
     field: 'schoolYear',
     component: 'Input',
-    //colProps: {span: 6},
   },
   {
     label: "学期",
@@ -94,7 +95,6 @@ export const searchFormSchema: FormSchema[] = [
     componentProps: {
       dictCode: "semester"
     },
-    //colProps: {span: 6},
   },
   {
     label: "生效状态",
@@ -103,7 +103,6 @@ export const searchFormSchema: FormSchema[] = [
     componentProps: {
       dictCode: "use_state"
     },
-    //colProps: {span: 6},
   },
 ];
 //表单数据

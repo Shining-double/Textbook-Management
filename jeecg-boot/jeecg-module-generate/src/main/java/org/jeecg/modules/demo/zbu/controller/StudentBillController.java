@@ -227,6 +227,10 @@ public class StudentBillController extends JeecgController<StudentBill, IStudent
 	@Operation(summary = "个人账单-汇总查询")
 	@GetMapping(value = "/summary")
 	public Result<?> querySummaryList(
+			@RequestParam(name = "studentNo", required = false) String studentNo,
+			@RequestParam(name = "studentName", required = false) String studentName,
+			@RequestParam(name = "className", required = false) String className,
+			@RequestParam(name = "majorName", required = false) String majorName,
 			@RequestParam(name = "schoolYear", required = false) String schoolYear,
 			@RequestParam(name = "semester", required = false) String semester,
 			@RequestParam(name = "pageNo", defaultValue = "1") Integer pageNo,
@@ -237,6 +241,22 @@ public class StudentBillController extends JeecgController<StudentBill, IStudent
 		String countSql = "SELECT COUNT(*) FROM v_student_bill_summary WHERE 1=1";
 
 		// 添加查询条件
+		if (oConvertUtils.isNotEmpty(studentNo)) {
+			baseSql += " AND studentNo LIKE '%" + studentNo + "%'";
+			countSql += " AND studentNo LIKE '%" + studentNo + "%'";
+		}
+		if (oConvertUtils.isNotEmpty(studentName)) {
+			baseSql += " AND studentName LIKE '%" + studentName + "%'";
+			countSql += " AND studentName LIKE '%" + studentName + "%'";
+		}
+		if (oConvertUtils.isNotEmpty(className)) {
+			baseSql += " AND className LIKE '%" + className + "%'";
+			countSql += " AND className LIKE '%" + className + "%'";
+		}
+		if (oConvertUtils.isNotEmpty(majorName)) {
+			baseSql += " AND majorName LIKE '%" + majorName + "%'";
+			countSql += " AND majorName LIKE '%" + majorName + "%'";
+		}
 		if (oConvertUtils.isNotEmpty(schoolYear)) {
 			baseSql += " AND schoolYear = '" + schoolYear + "'";
 			countSql += " AND schoolYear = '" + schoolYear + "'";
@@ -300,7 +320,20 @@ public class StudentBillController extends JeecgController<StudentBill, IStudent
 								   @RequestParam(name = "pageSize", defaultValue = "10") Integer pageSize,
 								   HttpServletRequest req) {
 
-		QueryWrapper<StudentBill> queryWrapper = QueryGenerator.initQueryWrapper(studentBill, req.getParameterMap());
+		// 处理className参数（班级名称在t_student表中，需要用子查询）
+		String className = req.getParameter("className");
+		Map<String, String[]> paramMap = new HashMap<>(req.getParameterMap());
+		if (className != null && !className.isEmpty()) {
+			paramMap.remove("className");
+		}
+
+		QueryWrapper<StudentBill> queryWrapper = QueryGenerator.initQueryWrapper(studentBill, paramMap);
+
+		// 如果有班级名称搜索条件，添加子查询
+		if (className != null && !className.isEmpty()) {
+			queryWrapper.inSql("student_id",
+					"SELECT student_id FROM t_student WHERE class_id IN (SELECT id FROM t_class WHERE class_name LIKE '%" + className + "%')");
+		}
 
 		// 1. 获取当前登录用户
 		LoginUser loginUser = (LoginUser) SecurityUtils.getSubject().getPrincipal();
@@ -321,12 +354,13 @@ public class StudentBillController extends JeecgController<StudentBill, IStudent
 		Page<StudentBill> page = new Page<StudentBill>(pageNo, pageSize);
 		IPage<StudentBill> pageList = studentBillService.page(page, queryWrapper);
 
-		// 4. 为每条记录查询ISBN
+		// 4. 为每条记录查询ISBN和班级名称
 		List<Map<String, Object>> recordsWithIsbn = new ArrayList<>();
 		for (StudentBill bill : pageList.getRecords()) {
 			Map<String, Object> recordMap = new HashMap<>();
 			recordMap.put("id", bill.getId());
 			recordMap.put("studentId", bill.getStudentId());
+			recordMap.put("className", bill.getClassName());
 			recordMap.put("majorName", bill.getMajorName());
 			recordMap.put("subscriptionYear", bill.getSubscriptionYear());
 			recordMap.put("subscriptionSemester", bill.getSubscriptionSemester());
@@ -350,6 +384,22 @@ public class StudentBillController extends JeecgController<StudentBill, IStudent
 				}
 			}
 			recordMap.put("isbn", isbn != null ? isbn : "");
+
+			// 查询班级名称
+			String studentIdForClass = bill.getStudentId();
+			if (studentIdForClass != null && !studentIdForClass.isEmpty()) {
+				try {
+					String classNameSql = "SELECT c.class_name FROM t_class c INNER JOIN t_student s ON s.class_id = c.id WHERE s.student_id = ? LIMIT 1";
+					String classNameResult = jdbcTemplate.queryForObject(classNameSql, String.class, studentIdForClass);
+					recordMap.put("className", classNameResult != null ? classNameResult : "");
+				} catch (Exception e) {
+					log.warn("查询班级名称失败：{}", e.getMessage());
+					recordMap.put("className", "");
+				}
+			} else {
+				recordMap.put("className", "");
+			}
+
 			recordsWithIsbn.add(recordMap);
 		}
 

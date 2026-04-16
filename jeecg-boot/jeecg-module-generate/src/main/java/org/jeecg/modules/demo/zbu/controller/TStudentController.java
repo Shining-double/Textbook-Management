@@ -56,7 +56,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import io.swagger.v3.oas.annotations.Operation;
 import org.jeecg.common.aspect.annotation.AutoLog;
 import org.apache.shiro.authz.annotation.RequiresPermissions;
- /**
+/**
  * @Description: 学生表
  * @Author: jeecg-boot
  * @Date:   2026-01-19
@@ -69,37 +69,37 @@ import org.apache.shiro.authz.annotation.RequiresPermissions;
 public class TStudentController extends JeecgController<TStudent, ITStudentService> {
 	@Autowired
 	private ITStudentService tStudentService;
-	 @Autowired
-	 private ISysUserService sysUserService;
-	 @Autowired
-	 private ISysRoleService sysRoleService;
-	 @Autowired
-	 private ISysUserRoleService sysUserRoleService;
-	 @Autowired
-	 private BaseCommonService baseCommonService;
-	 // 在TStudentController的@Autowired区域新增以下注入
-	 @Autowired
-	 private ITTextbookSelectionService tTextbookSelectionService;
-	 @Autowired
-	 private ITSubscriptionService tSubscriptionService;
-	 @Autowired
-	 private ITReceiveService tReceiveService;
-	 @Autowired
-	 private IStudentBillService studentBillService;
-	 @Autowired
-	 private ITTextbookService tTextbookService;
-	 @Autowired
-	 private ITMajorService tMajorService;
-	 @Autowired
-	 private ITClassService tClassService;
-	 @Autowired
-	 private ITCounselorService tCounselorService;
-	 // 注入JdbcTemplate用于执行原生SQL查询视图
-	 @Autowired
-	 private org.springframework.jdbc.core.JdbcTemplate jdbcTemplate;
+	@Autowired
+	private ISysUserService sysUserService;
+	@Autowired
+	private ISysRoleService sysRoleService;
+	@Autowired
+	private ISysUserRoleService sysUserRoleService;
+	@Autowired
+	private BaseCommonService baseCommonService;
+	// 在TStudentController的@Autowired区域新增以下注入
+	@Autowired
+	private ITTextbookSelectionService tTextbookSelectionService;
+	@Autowired
+	private ITSubscriptionService tSubscriptionService;
+	@Autowired
+	private ITReceiveService tReceiveService;
+	@Autowired
+	private IStudentBillService studentBillService;
+	@Autowired
+	private ITTextbookService tTextbookService;
+	@Autowired
+	private ITMajorService tMajorService;
+	@Autowired
+	private ITClassService tClassService;
+	@Autowired
+	private ITCounselorService tCounselorService;
+	// 注入JdbcTemplate用于执行原生SQL查询视图
+	@Autowired
+	private org.springframework.jdbc.core.JdbcTemplate jdbcTemplate;
 
-	 // 学生角色编码
-	 private static final String STUDENT_ROLE_CODE = "student";
+	// 学生角色编码
+	private static final String STUDENT_ROLE_CODE = "student";
 
 	/**
 	 * 分页列表查询
@@ -114,9 +114,9 @@ public class TStudentController extends JeecgController<TStudent, ITStudentServi
 	@Operation(summary="学生表-分页列表查询")
 	@GetMapping(value = "/list")
 	public Result<IPage<TStudent>> queryPageList(TStudent tStudent,
-								   @RequestParam(name="pageNo", defaultValue="1") Integer pageNo,
-								   @RequestParam(name="pageSize", defaultValue="10") Integer pageSize,
-								   HttpServletRequest req) {
+												 @RequestParam(name="pageNo", defaultValue="1") Integer pageNo,
+												 @RequestParam(name="pageSize", defaultValue="10") Integer pageSize,
+												 HttpServletRequest req) {
 
 
 //        // 自定义查询规则
@@ -159,9 +159,10 @@ public class TStudentController extends JeecgController<TStudent, ITStudentServi
 		// 自定义多选的查询规则为：LIKE_WITH_OR
 		customeRuleMap.put("status", QueryRuleEnum.LIKE_WITH_OR);
 
-		// 移除majorId参数，避免QueryGenerator创建错误的查询条件
+		// 移除majorId和classId参数，避免QueryGenerator创建错误的查询条件
 		Map<String, String[]> paramMap = new HashMap<>(req.getParameterMap());
 		String[] majorNameParams = paramMap.remove("majorName");
+		String[] classNameParams = paramMap.remove("className");
 
 		QueryWrapper<TStudent> queryWrapper = QueryGenerator.initQueryWrapper(tStudent, paramMap,
 				customeRuleMap);
@@ -180,6 +181,15 @@ public class TStudentController extends JeecgController<TStudent, ITStudentServi
 			if (oConvertUtils.isNotEmpty(majorName)) {
 				queryWrapper.inSql("major_id",
 						"SELECT id FROM t_major WHERE major_name LIKE CONCAT('%', '" + majorName + "', '%')");
+			}
+		}
+
+		// 班级模糊查询
+		if (classNameParams != null && classNameParams.length > 0) {
+			String className = classNameParams[0];
+			if (oConvertUtils.isNotEmpty(className)) {
+				queryWrapper.inSql("class_id",
+						"SELECT id FROM t_class WHERE class_name LIKE CONCAT('%', '" + className + "', '%')");
 			}
 		}
 
@@ -211,7 +221,7 @@ public class TStudentController extends JeecgController<TStudent, ITStudentServi
 		IPage<TStudent> pageList = tStudentService.page(page, queryWrapper);
 		return Result.OK(pageList);
 	}
-	
+
 	/**
 	 *   添加
 	 *
@@ -358,7 +368,7 @@ public class TStudentController extends JeecgController<TStudent, ITStudentServi
 		tStudentService.updateById(tStudent);
 		return Result.OK("编辑成功!");
 	}
-	
+
 	/**
 	 *   通过id删除
 	 *
@@ -549,7 +559,7 @@ public class TStudentController extends JeecgController<TStudent, ITStudentServi
 			return Result.error("批量删除失败：" + e.getMessage());
 		}
 	}
-	
+
 	/**
 	 * 通过id查询
 	 *
@@ -567,28 +577,28 @@ public class TStudentController extends JeecgController<TStudent, ITStudentServi
 		return Result.OK(tStudent);
 	}
 
-    /**
-    * 导出excel
-    *
-    * @param request
-    * @param tStudent
-    */
-    @RequiresPermissions("zbu:t_student:exportXls")
-    @RequestMapping(value = "/exportXls")
-    public ModelAndView exportXls(HttpServletRequest request, TStudent tStudent) {
-        return super.exportXls(request, tStudent, TStudent.class, "学生表");
-    }
+	/**
+	 * 导出excel
+	 *
+	 * @param request
+	 * @param tStudent
+	 */
+	@RequiresPermissions("zbu:t_student:exportXls")
+	@RequestMapping(value = "/exportXls")
+	public ModelAndView exportXls(HttpServletRequest request, TStudent tStudent) {
+		return super.exportXls(request, tStudent, TStudent.class, "学生表");
+	}
 
-    /**
-      * 通过excel导入数据
-    *
-    * @param request
-    * @param response
-    * @return
-    */
-    @RequiresPermissions("zbu:t_student:importExcel")
-    @RequestMapping(value = "/importExcel", method = RequestMethod.POST)
-    public Result<?> importExcel(HttpServletRequest request, HttpServletResponse response) {
+	/**
+	 * 通过excel导入数据
+	 *
+	 * @param request
+	 * @param response
+	 * @return
+	 */
+	@RequiresPermissions("zbu:t_student:importExcel")
+	@RequestMapping(value = "/importExcel", method = RequestMethod.POST)
+	public Result<?> importExcel(HttpServletRequest request, HttpServletResponse response) {
 		try {
 			// 1. 获取上传的Excel文件
 			MultipartHttpServletRequest multipartRequest = (MultipartHttpServletRequest) request;
@@ -791,166 +801,166 @@ public class TStudentController extends JeecgController<TStudent, ITStudentServi
 			log.error("Excel导入学生数据失败", e);
 			return Result.error("导入失败：" + e.getMessage());
 		}
-    }
+	}
 
 
-	 /**
-	  * 登录后获取当前用户的学生信息
-	  */
-	 @Operation(summary="获取当前登录学生的信息")
-	 @GetMapping("/getCurrentStudent")
-	 public Result<TStudent> getCurrentStudent() {
-		 // 1. 获取Shiro当前登录的Subject（核心）
-		 Subject subject = org.apache.shiro.SecurityUtils.getSubject();
-		 if (subject == null || !subject.isAuthenticated()) {
-			 return Result.error("用户未登录，请先登录");
-		 }
+	/**
+	 * 登录后获取当前用户的学生信息
+	 */
+	@Operation(summary="获取当前登录学生的信息")
+	@GetMapping("/getCurrentStudent")
+	public Result<TStudent> getCurrentStudent() {
+		// 1. 获取Shiro当前登录的Subject（核心）
+		Subject subject = org.apache.shiro.SecurityUtils.getSubject();
+		if (subject == null || !subject.isAuthenticated()) {
+			return Result.error("用户未登录，请先登录");
+		}
 
-		 // 2. 直接从Principal获取SysUser（绕过LoginUser，万能写法）
-		 Object principal = subject.getPrincipal();
-		 if (principal == null) {
-			 return Result.error("未获取到当前登录用户信息");
-		 }
+		// 2. 直接从Principal获取SysUser（绕过LoginUser，万能写法）
+		Object principal = subject.getPrincipal();
+		if (principal == null) {
+			return Result.error("未获取到当前登录用户信息");
+		}
 
-		 // 3. 适配不同版本：如果Principal是LoginUser，转成SysUser；如果直接是SysUser，直接用
-		 SysUser currentUser = null;
-		 if (principal instanceof SysUser) {
-			 // 版本1：Principal直接是SysUser（部分JeecgBoot版本）
-			 currentUser = (SysUser) principal;
-		 } else {
-			 // 版本2：Principal是LoginUser，用反射/强制转换获取SysUser（兼容所有版本）
-			 try {
-				 // 尝试调用getUser()（替代getSysUser()，多数版本用这个）
-				 Method getUserMethod = principal.getClass().getMethod("getUser");
-				 currentUser = (SysUser) getUserMethod.invoke(principal);
-			 } catch (Exception e) {
-				 // 兜底：如果getUser()也没有，提示版本适配问题
-				 return Result.error("当前JeecgBoot版本的LoginUser无getSysUser/getUser方法，请核对类结构");
-			 }
-		 }
+		// 3. 适配不同版本：如果Principal是LoginUser，转成SysUser；如果直接是SysUser，直接用
+		SysUser currentUser = null;
+		if (principal instanceof SysUser) {
+			// 版本1：Principal直接是SysUser（部分JeecgBoot版本）
+			currentUser = (SysUser) principal;
+		} else {
+			// 版本2：Principal是LoginUser，用反射/强制转换获取SysUser（兼容所有版本）
+			try {
+				// 尝试调用getUser()（替代getSysUser()，多数版本用这个）
+				Method getUserMethod = principal.getClass().getMethod("getUser");
+				currentUser = (SysUser) getUserMethod.invoke(principal);
+			} catch (Exception e) {
+				// 兜底：如果getUser()也没有，提示版本适配问题
+				return Result.error("当前JeecgBoot版本的LoginUser无getSysUser/getUser方法，请核对类结构");
+			}
+		}
 
-		 // 4. 根据sys_user.id查询学生表
-		 if (currentUser == null) {
-			 return Result.error("未解析到当前登录的系统用户信息");
-		 }
-		 TStudent student = tStudentService.lambdaQuery()
-				 .eq(TStudent::getUserId, currentUser.getId())
-				 .one();
+		// 4. 根据sys_user.id查询学生表
+		if (currentUser == null) {
+			return Result.error("未解析到当前登录的系统用户信息");
+		}
+		TStudent student = tStudentService.lambdaQuery()
+				.eq(TStudent::getUserId, currentUser.getId())
+				.one();
 
-		 if (student == null) {
-			 return Result.error("当前登录用户不是学生，未找到对应信息");
-		 }
-		 return Result.OK(student);
-	 }
-
-
-	 /**
-	  * 按学号查询学生信息
-	  */
-	 @GetMapping(value = "/queryByStudentId")
-	 public Result<TStudent> queryByStudentId(@RequestParam(name="studentId") String studentId) {
-		 QueryWrapper<TStudent> wrapper = new QueryWrapper<>();
-		 wrapper.eq("student_id", studentId);
-		 TStudent student = tStudentService.getOne(wrapper);
-		 if(student == null) {
-			 return Result.error("未找到对应学生");
-		 }
-		 return Result.OK(student);
-	 }
-
-	 /**
-	  * 按学号查询学生信息
-	  */
-	 @Operation(summary="按学号查询学生信息")
-	 @GetMapping(value = "/queryByNo")
-	 public Result<TStudent> queryByNo(@RequestParam(name="studentNo") String studentNo) {
-		 // 核心：查询条件用数据库字段student_id，参数名用studentNo（匹配前端）
-		 QueryWrapper<TStudent> wrapper = new QueryWrapper<>();
-		 wrapper.eq("student_id", studentNo);
-		 TStudent student = tStudentService.getOne(wrapper);
-		 if(student == null) {
-			 return Result.error("未找到对应学生");
-		 }
-		 return Result.OK(student);
-	 }
-
-	 /**
-	  * 为单个学生生成征订/领取/账单记录（适配教材选用表已有记录时新增学生的场景）
-	  * @param student 新增/导入的学生对象
-	  */
-	 private void generateStudentSubscription(TStudent student) {
-		 try {
-			 // 1. 校验学生核心字段（班级ID不能为空）
-			 if (oConvertUtils.isEmpty(student.getClassId())) {
-				 log.warn("学生{}（学号{}）无班级信息，跳过征订记录生成", student.getId(), student.getStudentId());
-				 return;
-			 }
-
-			 // 2. 查询该学生班级的有效教材选用记录（生效状态=1）
-			 QueryWrapper<TTextbookSelection> selectionWrapper = new QueryWrapper<>();
-			 selectionWrapper.eq("class_id", student.getClassId())
-					 .eq("selection_status", "1"); // 仅处理生效的教材选用记录
-			 List<TTextbookSelection> selectionList = tTextbookSelectionService.list(selectionWrapper);
-			 if (selectionList.isEmpty()) {
-				 log.info("学生{}（学号{}）所在班级{}无有效教材选用记录，跳过征订记录生成",
-						 student.getId(), student.getStudentId(), student.getClassId());
-				 return;
-			 }
-
-			 // 3. 遍历教材选用记录，为该学生生成关联记录
-			 for (TTextbookSelection selection : selectionList) {
-				 // 3.1 防重复：检查该学生+该教材+该学年学期是否已存在征订记录
-				 QueryWrapper<TSubscription> subExistWrapper = new QueryWrapper<>();
-				 subExistWrapper.eq("student_id", student.getId())
-						 .eq("textbook_id", selection.getTextbookId())
-						 .eq("subscription_year", selection.getSchoolYear())
-						 .eq("subscription_semester", selection.getSemester());
-				 if (tSubscriptionService.count(subExistWrapper) > 0) {
-					 log.warn("学生{}（学号{}）已存在教材{}的征订记录，跳过",
-							 student.getId(), student.getStudentId(), selection.getTextbookId());
-					 continue;
-				 }
-
-				 // ========== 生成征订记录 ==========
-				 TSubscription subscription = new TSubscription();
-				 subscription.setStudentId(student.getId()); // 学生主键ID
-				 subscription.setTextbookId(selection.getTextbookId()); // 教材ID
-				 subscription.setSelectionId(selection.getId()); // 关联教材选用记录ID
-				 subscription.setMajorId(selection.getMajorId()); // 专业ID
-				 subscription.setSubscriptionYear(selection.getSchoolYear()); // 征订学年
-				 subscription.setSubscriptionSemester(selection.getSemester()); // 征订学期
-				 subscription.setSubscribeStatus("未设置"); // 初始征订状态
-				 subscription.setRemark("");
-				 subscription.setCreateTime(new Date());
-				 subscription.setUpdateTime(new Date());
-				 tSubscriptionService.save(subscription);
-				 log.info("为学生{}生成征订记录：{}", student.getStudentId(), subscription.getId());
+		if (student == null) {
+			return Result.error("当前登录用户不是学生，未找到对应信息");
+		}
+		return Result.OK(student);
+	}
 
 
-			 }
-		 } catch (Exception e) {
-			 log.error("为学生{}生成征订记录失败", student.getStudentId(), e);
-			 throw new RuntimeException("学生新增成功，但生成教材征订相关记录失败：" + e.getMessage());
-		 }
-	 }
+	/**
+	 * 按学号查询学生信息
+	 */
+	@GetMapping(value = "/queryByStudentId")
+	public Result<TStudent> queryByStudentId(@RequestParam(name="studentId") String studentId) {
+		QueryWrapper<TStudent> wrapper = new QueryWrapper<>();
+		wrapper.eq("student_id", studentId);
+		TStudent student = tStudentService.getOne(wrapper);
+		if(student == null) {
+			return Result.error("未找到对应学生");
+		}
+		return Result.OK(student);
+	}
+
+	/**
+	 * 按学号查询学生信息
+	 */
+	@Operation(summary="按学号查询学生信息")
+	@GetMapping(value = "/queryByNo")
+	public Result<TStudent> queryByNo(@RequestParam(name="studentNo") String studentNo) {
+		// 核心：查询条件用数据库字段student_id，参数名用studentNo（匹配前端）
+		QueryWrapper<TStudent> wrapper = new QueryWrapper<>();
+		wrapper.eq("student_id", studentNo);
+		TStudent student = tStudentService.getOne(wrapper);
+		if(student == null) {
+			return Result.error("未找到对应学生");
+		}
+		return Result.OK(student);
+	}
+
+	/**
+	 * 为单个学生生成征订/领取/账单记录（适配教材选用表已有记录时新增学生的场景）
+	 * @param student 新增/导入的学生对象
+	 */
+	private void generateStudentSubscription(TStudent student) {
+		try {
+			// 1. 校验学生核心字段（班级ID不能为空）
+			if (oConvertUtils.isEmpty(student.getClassId())) {
+				log.warn("学生{}（学号{}）无班级信息，跳过征订记录生成", student.getId(), student.getStudentId());
+				return;
+			}
+
+			// 2. 查询该学生班级的有效教材选用记录（生效状态=1）
+			QueryWrapper<TTextbookSelection> selectionWrapper = new QueryWrapper<>();
+			selectionWrapper.eq("class_id", student.getClassId())
+					.eq("selection_status", "1"); // 仅处理生效的教材选用记录
+			List<TTextbookSelection> selectionList = tTextbookSelectionService.list(selectionWrapper);
+			if (selectionList.isEmpty()) {
+				log.info("学生{}（学号{}）所在班级{}无有效教材选用记录，跳过征订记录生成",
+						student.getId(), student.getStudentId(), student.getClassId());
+				return;
+			}
+
+			// 3. 遍历教材选用记录，为该学生生成关联记录
+			for (TTextbookSelection selection : selectionList) {
+				// 3.1 防重复：检查该学生+该教材+该学年学期是否已存在征订记录
+				QueryWrapper<TSubscription> subExistWrapper = new QueryWrapper<>();
+				subExistWrapper.eq("student_id", student.getId())
+						.eq("textbook_id", selection.getTextbookId())
+						.eq("subscription_year", selection.getSchoolYear())
+						.eq("subscription_semester", selection.getSemester());
+				if (tSubscriptionService.count(subExistWrapper) > 0) {
+					log.warn("学生{}（学号{}）已存在教材{}的征订记录，跳过",
+							student.getId(), student.getStudentId(), selection.getTextbookId());
+					continue;
+				}
+
+				// ========== 生成征订记录 ==========
+				TSubscription subscription = new TSubscription();
+				subscription.setStudentId(student.getId()); // 学生主键ID
+				subscription.setTextbookId(selection.getTextbookId()); // 教材ID
+				subscription.setSelectionId(selection.getId()); // 关联教材选用记录ID
+				subscription.setMajorId(selection.getMajorId()); // 专业ID
+				subscription.setSubscriptionYear(selection.getSchoolYear()); // 征订学年
+				subscription.setSubscriptionSemester(selection.getSemester()); // 征订学期
+				subscription.setSubscribeStatus("未设置"); // 初始征订状态
+				subscription.setRemark("");
+				subscription.setCreateTime(new Date());
+				subscription.setUpdateTime(new Date());
+				tSubscriptionService.save(subscription);
+				log.info("为学生{}生成征订记录：{}", student.getStudentId(), subscription.getId());
 
 
-	 /**
-	  * 获取所有专业（下拉框专用，无权限拦截）
-	  */
-	 @GetMapping("/getMajorList")
-	 public Result<List<TMajor>> getMajorList() {
-		 List<TMajor> list = tMajorService.list();
-		 return Result.OK(list);
-	 }
+			}
+		} catch (Exception e) {
+			log.error("为学生{}生成征订记录失败", student.getStudentId(), e);
+			throw new RuntimeException("学生新增成功，但生成教材征订相关记录失败：" + e.getMessage());
+		}
+	}
 
-	 /**
-	  * 获取所有班级（下拉框专用，无权限拦截）
-	  */
-	 @GetMapping("/getClassList")
-	 public Result<List<TClass>> getClassList() {
-		 List<TClass> list = tClassService.list();
-		 return Result.OK(list);
-	 }
+
+	/**
+	 * 获取所有专业（下拉框专用，无权限拦截）
+	 */
+	@GetMapping("/getMajorList")
+	public Result<List<TMajor>> getMajorList() {
+		List<TMajor> list = tMajorService.list();
+		return Result.OK(list);
+	}
+
+	/**
+	 * 获取所有班级（下拉框专用，无权限拦截）
+	 */
+	@GetMapping("/getClassList")
+	public Result<List<TClass>> getClassList() {
+		List<TClass> list = tClassService.list();
+		return Result.OK(list);
+	}
 
 }

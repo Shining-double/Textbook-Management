@@ -25,6 +25,7 @@ import org.jeecgframework.poi.excel.entity.ExportParams;
 import org.jeecgframework.poi.excel.entity.ImportParams;
 import org.jeecgframework.poi.excel.view.JeecgEntityExcelView;
 import org.jeecg.common.system.base.controller.JeecgController;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
@@ -35,7 +36,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import io.swagger.v3.oas.annotations.Operation;
 import org.jeecg.common.aspect.annotation.AutoLog;
 import org.apache.shiro.authz.annotation.RequiresPermissions;
- /**
+/**
  * @Description: 班级表
  * @Author: jeecg-boot
  * @Date:   2026-01-26
@@ -48,7 +49,9 @@ import org.apache.shiro.authz.annotation.RequiresPermissions;
 public class TClassController extends JeecgController<TClass, ITClassService> {
 	@Autowired
 	private ITClassService tClassService;
-	
+	@Autowired
+	private JdbcTemplate jdbcTemplate;
+
 	/**
 	 * 分页列表查询
 	 *
@@ -62,17 +65,54 @@ public class TClassController extends JeecgController<TClass, ITClassService> {
 	@Operation(summary="班级表-分页列表查询")
 	@GetMapping(value = "/list")
 	public Result<IPage<TClass>> queryPageList(TClass tClass,
-								   @RequestParam(name="pageNo", defaultValue="1") Integer pageNo,
-								   @RequestParam(name="pageSize", defaultValue="10") Integer pageSize,
-								   HttpServletRequest req) {
+											   @RequestParam(name="pageNo", defaultValue="1") Integer pageNo,
+											   @RequestParam(name="pageSize", defaultValue="10") Integer pageSize,
+											   HttpServletRequest req) {
 
+		// 处理搜索参数
+		String counselorName = req.getParameter("counselorName");
+		String counselorNo = req.getParameter("counselorNo");
+		Map<String, String[]> paramMap = new HashMap<>(req.getParameterMap());
+		if (counselorName != null && !counselorName.isEmpty()) {
+			paramMap.remove("counselorName");
+		}
+		if (counselorNo != null && !counselorNo.isEmpty()) {
+			paramMap.remove("counselorNo");
+		}
 
-        QueryWrapper<TClass> queryWrapper = QueryGenerator.initQueryWrapper(tClass, req.getParameterMap());
+		QueryWrapper<TClass> queryWrapper = QueryGenerator.initQueryWrapper(tClass, paramMap);
+
+		// 按辅导员名称搜索
+		if (counselorName != null && !counselorName.isEmpty()) {
+			queryWrapper.inSql("counselor_id",
+					"SELECT id FROM t_counselor WHERE counselor_name LIKE '%" + counselorName + "%'");
+		}
+
+		// 按辅导员工号搜索
+		if (counselorNo != null && !counselorNo.isEmpty()) {
+			queryWrapper.inSql("counselor_id",
+					"SELECT id FROM t_counselor WHERE counselor_id LIKE '%" + counselorNo + "%'");
+		}
+
 		Page<TClass> page = new Page<TClass>(pageNo, pageSize);
 		IPage<TClass> pageList = tClassService.page(page, queryWrapper);
+
+		// 填充辅导员工号
+		for (TClass record : pageList.getRecords()) {
+			if (record.getCounselorId() != null && !record.getCounselorId().isEmpty()) {
+				try {
+					String counselorNoSql = "SELECT counselor_id FROM t_counselor WHERE id = ? LIMIT 1";
+					String counselorNoResult = jdbcTemplate.queryForObject(counselorNoSql, String.class, record.getCounselorId());
+					record.setCounselorNo(counselorNoResult);
+				} catch (Exception e) {
+					log.warn("查询辅导员工号失败：{}", e.getMessage());
+				}
+			}
+		}
+
 		return Result.OK(pageList);
 	}
-	
+
 	/**
 	 *   添加
 	 *
@@ -103,7 +143,7 @@ public class TClassController extends JeecgController<TClass, ITClassService> {
 
 		return Result.OK("添加成功！");
 	}
-	
+
 	/**
 	 *  编辑
 	 *
@@ -118,7 +158,7 @@ public class TClassController extends JeecgController<TClass, ITClassService> {
 		tClassService.updateById(tClass);
 		return Result.OK("编辑成功!");
 	}
-	
+
 	/**
 	 *   通过id删除
 	 *
@@ -133,7 +173,7 @@ public class TClassController extends JeecgController<TClass, ITClassService> {
 		tClassService.removeById(id);
 		return Result.OK("删除成功!");
 	}
-	
+
 	/**
 	 *  批量删除
 	 *
@@ -148,7 +188,7 @@ public class TClassController extends JeecgController<TClass, ITClassService> {
 		this.tClassService.removeByIds(Arrays.asList(ids.split(",")));
 		return Result.OK("批量删除成功!");
 	}
-	
+
 	/**
 	 * 通过id查询
 	 *
@@ -166,28 +206,28 @@ public class TClassController extends JeecgController<TClass, ITClassService> {
 		return Result.OK(tClass);
 	}
 
-    /**
-    * 导出excel
-    *
-    * @param request
-    * @param tClass
-    */
-    @RequiresPermissions("zbu:t_class:exportXls")
-    @RequestMapping(value = "/exportXls")
-    public ModelAndView exportXls(HttpServletRequest request, TClass tClass) {
-        return super.exportXls(request, tClass, TClass.class, "班级表");
-    }
+	/**
+	 * 导出excel
+	 *
+	 * @param request
+	 * @param tClass
+	 */
+	@RequiresPermissions("zbu:t_class:exportXls")
+	@RequestMapping(value = "/exportXls")
+	public ModelAndView exportXls(HttpServletRequest request, TClass tClass) {
+		return super.exportXls(request, tClass, TClass.class, "班级表");
+	}
 
-    /**
-      * 通过excel导入数据
-    *
-    * @param request
-    * @param response
-    * @return
-    */
-    @RequiresPermissions("zbu:t_class:importExcel")
-    @RequestMapping(value = "/importExcel", method = RequestMethod.POST)
-    public Result<?> importExcel(HttpServletRequest request, HttpServletResponse response) {
+	/**
+	 * 通过excel导入数据
+	 *
+	 * @param request
+	 * @param response
+	 * @return
+	 */
+	@RequiresPermissions("zbu:t_class:importExcel")
+	@RequestMapping(value = "/importExcel", method = RequestMethod.POST)
+	public Result<?> importExcel(HttpServletRequest request, HttpServletResponse response) {
 		try {
 			// 1. 获取上传的Excel文件
 			MultipartHttpServletRequest multipartRequest = (MultipartHttpServletRequest) request;
@@ -302,6 +342,6 @@ public class TClassController extends JeecgController<TClass, ITClassService> {
 			log.error("Excel导入班级数据失败", e);
 			return Result.error("导入失败：" + e.getMessage());
 		}
-    }
+	}
 
 }
