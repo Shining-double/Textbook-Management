@@ -27,6 +27,12 @@ import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import lombok.extern.slf4j.Slf4j;
 
+import org.jeecg.modules.system.entity.SysRole;
+import org.jeecg.modules.system.entity.SysUser;
+import org.jeecg.modules.system.entity.SysUserRole;
+import org.jeecg.modules.system.service.ISysRoleService;
+import org.jeecg.modules.system.service.ISysUserRoleService;
+import org.jeecg.modules.system.service.ISysUserService;
 import org.jeecgframework.poi.excel.ExcelImportUtil;
 import org.jeecgframework.poi.excel.def.NormalExcelConstants;
 import org.jeecgframework.poi.excel.entity.ExportParams;
@@ -55,6 +61,9 @@ import org.apache.shiro.authz.annotation.RequiresPermissions;
 @RequestMapping("/zbu/studentBill")
 @Slf4j
 public class StudentBillController extends JeecgController<StudentBill, IStudentBillService> {
+	private static final String ADMIN_ROLE_CODE = "admin";
+	private static final String COUNSELOR_ROLE_CODE = "counselor";
+
 	@Autowired
 	private IStudentBillService studentBillService;
 	@Autowired
@@ -67,6 +76,16 @@ public class StudentBillController extends JeecgController<StudentBill, IStudent
 	private ITMajorService tMajorService;
 	@Autowired
 	private ITReceiveService tReceiveService;
+	@Autowired
+	private ITCounselorService tCounselorService;
+	@Autowired
+	private ITClassService tClassService;
+	@Autowired
+	private ISysUserService sysUserService;
+	@Autowired
+	private ISysRoleService sysRoleService;
+	@Autowired
+	private ISysUserRoleService sysUserRoleService;
 	@Autowired
 	private JdbcTemplate jdbcTemplate;
 
@@ -239,6 +258,25 @@ public class StudentBillController extends JeecgController<StudentBill, IStudent
 		// 构建基础SQL（使用汇总视图）
 		String baseSql = "SELECT * FROM v_student_bill_summary WHERE 1=1";
 		String countSql = "SELECT COUNT(*) FROM v_student_bill_summary WHERE 1=1";
+
+		// 辅导员角色过滤：只显示自己管理班级的学生
+		LoginUser loginUser = (LoginUser) SecurityUtils.getSubject().getPrincipal();
+		if (loginUser != null) {
+			String userRoleType = getUserRoleType(loginUser.getId());
+			if (COUNSELOR_ROLE_CODE.equals(userRoleType)) {
+				List<String> studentIds = getCounselorStudentIds(loginUser.getId());
+				if (!studentIds.isEmpty()) {
+					String studentIdInClause = studentIds.stream()
+							.map(id -> "'" + id + "'")
+							.collect(Collectors.joining(","));
+					baseSql += " AND studentId IN (" + studentIdInClause + ")";
+					countSql += " AND studentId IN (" + studentIdInClause + ")";
+				} else {
+					baseSql += " AND 1=0";
+					countSql += " AND 1=0";
+				}
+			}
+		}
 
 		// 添加查询条件
 		if (oConvertUtils.isNotEmpty(studentNo)) {
@@ -568,6 +606,62 @@ public class StudentBillController extends JeecgController<StudentBill, IStudent
 			log.error("批量修改领取状态异常", e);
 			return Result.error("领取状态修改失败：" + e.getMessage());
 		}
+	}
+
+	private String getUserRoleType(String userId) {
+		QueryWrapper<SysUserRole> userRoleWrapper = new QueryWrapper<>();
+		userRoleWrapper.eq("user_id", userId);
+		List<SysUserRole> userRoleList = sysUserRoleService.list(userRoleWrapper);
+		if (userRoleList.isEmpty()) {
+			return "";
+		}
+
+		List<String> roleIds = userRoleList.stream()
+				.map(SysUserRole::getRoleId)
+				.collect(Collectors.toList());
+		List<SysRole> roleList = sysRoleService.listByIds(roleIds);
+
+		for (SysRole role : roleList) {
+			if (ADMIN_ROLE_CODE.equals(role.getRoleCode())) {
+				return ADMIN_ROLE_CODE;
+			}
+			if (COUNSELOR_ROLE_CODE.equals(role.getRoleCode())) {
+				return COUNSELOR_ROLE_CODE;
+			}
+		}
+		return "";
+	}
+
+	private List<String> getCounselorStudentIds(String userId) {
+		List<String> studentIds = new ArrayList<>();
+		try {
+			TCounselor counselor = tCounselorService.lambdaQuery()
+					.eq(TCounselor::getUserId, userId).one();
+			if (counselor == null) {
+				return studentIds;
+			}
+
+			List<TClass> classList = tClassService.lambdaQuery()
+					.eq(TClass::getCounselorId, counselor.getId()).list();
+			if (classList.isEmpty()) {
+				return studentIds;
+			}
+
+			List<String> classIds = classList.stream().map(TClass::getId).collect(Collectors.toList());
+			List<TStudent> studentList = tStudentService.lambdaQuery()
+					.in(TStudent::getClassId, classIds).list();
+			if (studentList.isEmpty()) {
+				return studentIds;
+			}
+
+			studentIds = studentList.stream()
+					.map(TStudent::getStudentId)
+					.filter(id -> !oConvertUtils.isEmpty(id))
+					.collect(Collectors.toList());
+		} catch (Exception e) {
+			log.error("获取辅导员学生ID列表失败", e);
+		}
+		return studentIds;
 	}
 
 }

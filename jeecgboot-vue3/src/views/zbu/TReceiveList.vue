@@ -1,4 +1,4 @@
-﻿﻿<template>
+﻿﻿﻿﻿<template>
   <div>
     <BasicTable
       @register="registerTable"
@@ -14,7 +14,7 @@
             @click="handleBatchUpdateReceiveStatus"
             v-if="!isAdmin && !isCounselor"
           >
-            是否同意领取
+            同意领取
           </a-button>
           <a-button
             type="primary"
@@ -23,6 +23,15 @@
             v-if="(isAdmin || isCounselor) && selectedRowKeys.length > 0"
           >
             批量标记为已领取
+          </a-button>
+          <a-button
+            type="primary"
+            size="small"
+            @click="handleBatchUpdateReceiveStatusUn"
+            v-if="(isAdmin || isCounselor) && selectedRowKeys.length > 0"
+            style="margin-left: 8px"
+          >
+            批量标记为未领取
           </a-button>
         </div>
 
@@ -377,35 +386,23 @@ const handleBatchUpdateReceiveStatus = async () => {
     let receiveIds: string[] = [];
     const tableData = await fetchTableData();
 
-    // 1. 分角色处理数据筛选
-    if (unref(isStudent)) {
-      // 学生端：筛选自己的未领取记录
-      const validRecords = tableData.records.filter(item => {
-        const isUnReceived = item.receiveStatus !== '1' && item.receiveStatus !== '已领取';
-        const isOwnRecord = item.receiveOperator === currentStudentId.value;
-        return isUnReceived && isOwnRecord;
-      });
-      receiveIds = validRecords.map(item => item.id).filter(Boolean);
-    } else {
-      // 管理员/辅导员端：筛选选中的未领取记录
-      if (selectedRowKeys.value.length === 0) {
-        createMessage.info("请先选中要修改的记录！");
-        return;
-      }
-      const validRecords = tableData.records.filter(item => {
-        const isUnReceived = item.receiveStatus !== '1' && item.receiveStatus !== '已领取';
-        const isSelected = selectedRowKeys.value.includes(item.id);
-        return isUnReceived && isSelected;
-      });
-      receiveIds = validRecords.map(item => item.id).filter(Boolean);
+    // 1. 检查是否有选中的记录
+    if (selectedRowKeys.value.length === 0) {
+      createMessage.info("请先选中要修改的记录！");
+      return;
     }
 
-    // 2. 无数据判断
+    // 2. 筛选选中的未领取记录
+    const validRecords = tableData.records.filter(item => {
+      const isUnReceived = item.receiveStatus !== '1' && item.receiveStatus !== '已领取';
+      const isSelected = selectedRowKeys.value.includes(item.id);
+      return isUnReceived && isSelected;
+    });
+    receiveIds = validRecords.map(item => item.id).filter(Boolean);
+
+    // 3. 无数据判断
     if (receiveIds.length === 0) {
-      const tipMsg = unref(isStudent)
-        ? "暂无属于你的未领取记录需要修改！"
-        : "暂无选中的未领取记录需要修改！";
-      createMessage.info(tipMsg);
+      createMessage.info("暂无选中的未领取记录需要修改！");
       return;
     }
 
@@ -413,7 +410,7 @@ const handleBatchUpdateReceiveStatus = async () => {
     const res = await batchUpdateReceiveStatus({
       ids: receiveIds,
       receiveStatus: '1',
-      receiveOperator: unref(isStudent) ? currentStudentId.value : userStore.getUserInfo.id
+      receiveOperator: userStore.getUserInfo.id
     });
     createMessage.success(res.msg || `成功修改${receiveIds.length}条记录的领取状态！`);
 
@@ -425,6 +422,49 @@ const handleBatchUpdateReceiveStatus = async () => {
       createMessage.error("你没有权限修改该记录！");
     } else if (errorMsg.includes("无数据被更新")) {
       createMessage.info("暂无未领取的记录需要修改！");
+    } else {
+      createMessage.error(errorMsg || '领取状态修改失败，请重试！');
+    }
+  }
+};
+
+const handleBatchUpdateReceiveStatusUn = async () => {
+  try {
+    let receiveIds: string[] = [];
+    const tableData = await fetchTableData();
+
+    if (selectedRowKeys.value.length === 0) {
+      createMessage.info("请先选中要修改的记录！");
+      return;
+    }
+
+    const validRecords = tableData.records.filter(item => {
+      const isReceived = item.receiveStatus === '1' || item.receiveStatus === '已领取';
+      const isSelected = selectedRowKeys.value.includes(item.id);
+      return isReceived && isSelected;
+    });
+    receiveIds = validRecords.map(item => item.id).filter(Boolean);
+
+    if (receiveIds.length === 0) {
+      createMessage.info("暂无选中的已领取记录需要修改！");
+      return;
+    }
+
+    const res = await batchUpdateReceiveStatus({
+      ids: receiveIds,
+      receiveStatus: '0',
+      receiveOperator: userStore.getUserInfo.id
+    });
+    createMessage.success(res.msg || `成功修改${receiveIds.length}条记录的领取状态！`);
+
+    reload();
+  } catch (e: any) {
+    console.error("【批量修改领取状态失败】：", e);
+    const errorMsg = e.msg || e.message || "";
+    if (errorMsg.includes("无权限")) {
+      createMessage.error("你没有权限修改该记录！");
+    } else if (errorMsg.includes("无数据被更新")) {
+      createMessage.info("暂无已领取的记录需要修改！");
     } else {
       createMessage.error(errorMsg || '领取状态修改失败，请重试！');
     }
