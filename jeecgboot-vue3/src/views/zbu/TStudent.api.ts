@@ -73,3 +73,4 @@ export const getCurrentStudent = () =>
 // 新增：专业/班级下拉框方法（前端直接调用）
 export const getMajorList = () => defHttp.get({ url: Api.getMajorList });
 export const getClassList = () => defHttp.get({ url: Api.getClassList });
+export const getClassListByMajor = (majorId) => defHttp.get({ url: '/zbu/tStudent/getClassListByMajor', params: { majorId } });

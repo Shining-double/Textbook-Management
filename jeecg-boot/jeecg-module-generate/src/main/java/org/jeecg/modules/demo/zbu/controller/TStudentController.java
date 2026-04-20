@@ -947,10 +947,102 @@ public class TStudentController extends JeecgController<TStudent, ITStudentServi
 
 	/**
 	 * 获取所有专业（下拉框专用，无权限拦截）
+	 * 辅导员只能获取自己管理班级的专业
 	 */
 	@GetMapping("/getMajorList")
 	public Result<List<TMajor>> getMajorList() {
+		LoginUser loginUser = (LoginUser) SecurityUtils.getSubject().getPrincipal();
+		String username = loginUser.getUsername();
+		boolean isAdmin = "admin".equals(username) || "sysadmin".equals(username);
+
+		if (isAdmin) {
+			List<TMajor> list = tMajorService.list();
+			return Result.OK(list);
+		}
+
+		boolean isCounselor = false;
+		List<SysUserRole> userRoleList = sysUserRoleService
+				.list(new LambdaQueryWrapper<SysUserRole>().eq(SysUserRole::getUserId, loginUser.getId()));
+		if (!userRoleList.isEmpty()) {
+			List<String> roleIds = userRoleList.stream().map(SysUserRole::getRoleId).collect(Collectors.toList());
+			List<SysRole> roleList = sysRoleService.listByIds(roleIds);
+			for (SysRole role : roleList) {
+				if ("counselor".equals(role.getRoleCode())) {
+					isCounselor = true;
+					break;
+				}
+			}
+		}
+
+		if (isCounselor) {
+			QueryWrapper<TCounselor> counselorWrapper = new QueryWrapper<>();
+			counselorWrapper.eq("user_id", loginUser.getId());
+			TCounselor counselor = tCounselorService.getOne(counselorWrapper);
+			if (counselor != null) {
+				QueryWrapper<TClass> classWrapper = new QueryWrapper<>();
+				classWrapper.eq("counselor_id", counselor.getId());
+				List<TClass> classList = tClassService.list(classWrapper);
+				if (!classList.isEmpty()) {
+					List<String> majorIds = classList.stream()
+							.map(TClass::getMajorId)
+							.filter(m -> oConvertUtils.isNotEmpty(m))
+							.distinct()
+							.collect(Collectors.toList());
+					if (!majorIds.isEmpty()) {
+						QueryWrapper<TMajor> majorWrapper = new QueryWrapper<>();
+						majorWrapper.in("id", majorIds);
+						List<TMajor> majorList = tMajorService.list(majorWrapper);
+						return Result.OK(majorList);
+					}
+				}
+			}
+			return Result.OK(new ArrayList<>());
+		}
+
 		List<TMajor> list = tMajorService.list();
+		return Result.OK(list);
+	}
+
+	/**
+	 * 根据专业ID获取班级列表（下拉框专用，辅导员只能获取自己管理的班级）
+	 */
+	@GetMapping("/getClassListByMajor")
+	public Result<List<TClass>> getClassListByMajor(@RequestParam(name = "majorId") String majorId) {
+		LoginUser loginUser = (LoginUser) SecurityUtils.getSubject().getPrincipal();
+		String username = loginUser.getUsername();
+		boolean isAdmin = "admin".equals(username) || "sysadmin".equals(username);
+
+		QueryWrapper<TClass> classWrapper = new QueryWrapper<>();
+		classWrapper.eq("major_id", majorId);
+
+		if (!isAdmin) {
+			boolean isCounselor = false;
+			List<SysUserRole> userRoleList = sysUserRoleService
+					.list(new LambdaQueryWrapper<SysUserRole>().eq(SysUserRole::getUserId, loginUser.getId()));
+			if (!userRoleList.isEmpty()) {
+				List<String> roleIds = userRoleList.stream().map(SysUserRole::getRoleId).collect(Collectors.toList());
+				List<SysRole> roleList = sysRoleService.listByIds(roleIds);
+				for (SysRole role : roleList) {
+					if ("counselor".equals(role.getRoleCode())) {
+						isCounselor = true;
+						break;
+					}
+				}
+			}
+
+			if (isCounselor) {
+				QueryWrapper<TCounselor> counselorWrapper = new QueryWrapper<>();
+				counselorWrapper.eq("user_id", loginUser.getId());
+				TCounselor counselor = tCounselorService.getOne(counselorWrapper);
+				if (counselor != null) {
+					classWrapper.eq("counselor_id", counselor.getId());
+				} else {
+					return Result.OK(new ArrayList<>());
+				}
+			}
+		}
+
+		List<TClass> list = tClassService.list(classWrapper);
 		return Result.OK(list);
 	}
 
