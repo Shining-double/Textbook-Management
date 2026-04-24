@@ -56,13 +56,14 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import io.swagger.v3.oas.annotations.Operation;
 import org.jeecg.common.aspect.annotation.AutoLog;
 import org.apache.shiro.authz.annotation.RequiresPermissions;
+
 /**
  * @Description: 学生表
  * @Author: jeecg-boot
- * @Date:   2026-01-19
+ * @Date: 2026-01-19
  * @Version: V1.0
  */
-@Tag(name="学生表")
+@Tag(name = "学生表")
 @RestController
 @RequestMapping("/zbu/tStudent")
 @Slf4j
@@ -110,26 +111,29 @@ public class TStudentController extends JeecgController<TStudent, ITStudentServi
 	 * @param req
 	 * @return
 	 */
-	//@AutoLog(value = "学生表-分页列表查询")
-	@Operation(summary="学生表-分页列表查询")
+	// @AutoLog(value = "学生表-分页列表查询")
+	@Operation(summary = "学生表-分页列表查询")
 	@GetMapping(value = "/list")
 	public Result<IPage<TStudent>> queryPageList(TStudent tStudent,
-												 @RequestParam(name="pageNo", defaultValue="1") Integer pageNo,
-												 @RequestParam(name="pageSize", defaultValue="10") Integer pageSize,
+												 @RequestParam(name = "pageNo", defaultValue = "1") Integer pageNo,
+												 @RequestParam(name = "pageSize", defaultValue = "10") Integer pageSize,
 												 HttpServletRequest req) {
 
-
-//        // 自定义查询规则
-//        Map<String, QueryRuleEnum> customeRuleMap = new HashMap<>();
-//        // 自定义多选的查询规则为：LIKE_WITH_OR
-//        customeRuleMap.put("status", QueryRuleEnum.LIKE_WITH_OR);
-//        QueryWrapper<TStudent> queryWrapper = QueryGenerator.initQueryWrapper(tStudent, req.getParameterMap(),customeRuleMap);
-//
-//		// 学院模糊查询
-//		String collegeName = req.getParameter("collegeName");
-//		if (oConvertUtils.isNotEmpty(collegeName)) {
-//			queryWrapper.inSql("major_id", "SELECT id FROM t_major WHERE college_id IN (SELECT id FROM t_college WHERE college_name LIKE CONCAT('%', '" + collegeName + "', '%'))");
-//		}
+		// // 自定义查询规则
+		// Map<String, QueryRuleEnum> customeRuleMap = new HashMap<>();
+		// // 自定义多选的查询规则为：LIKE_WITH_OR
+		// customeRuleMap.put("status", QueryRuleEnum.LIKE_WITH_OR);
+		// QueryWrapper<TStudent> queryWrapper =
+		// QueryGenerator.initQueryWrapper(tStudent,
+		// req.getParameterMap(),customeRuleMap);
+		//
+		// // 学院模糊查询
+		// String collegeName = req.getParameter("collegeName");
+		// if (oConvertUtils.isNotEmpty(collegeName)) {
+		// queryWrapper.inSql("major_id", "SELECT id FROM t_major WHERE college_id IN
+		// (SELECT id FROM t_college WHERE college_name LIKE CONCAT('%', '" +
+		// collegeName + "', '%'))");
+		// }
 
 		// 获取当前登录用户
 		LoginUser loginUser = (LoginUser) SecurityUtils.getSubject().getPrincipal();
@@ -152,7 +156,6 @@ public class TStudentController extends JeecgController<TStudent, ITStudentServi
 				}
 			}
 		}
-
 
 		// 自定义查询规则
 		Map<String, QueryRuleEnum> customeRuleMap = new HashMap<>();
@@ -223,13 +226,13 @@ public class TStudentController extends JeecgController<TStudent, ITStudentServi
 	}
 
 	/**
-	 *   添加
+	 * 添加
 	 *
 	 * @param tStudent
 	 * @return
 	 */
 	@AutoLog(value = "学生表-添加")
-	@Operation(summary="学生表-添加")
+	@Operation(summary = "学生表-添加")
 	@RequiresPermissions("zbu:t_student:add")
 	@PostMapping(value = "/add")
 	public Result<String> add(@RequestBody TStudent tStudent) {
@@ -348,39 +351,40 @@ public class TStudentController extends JeecgController<TStudent, ITStudentServi
 
 			generateStudentSubscription(tStudent);
 
-			return Result.OK("添加成功",encryptedPwd);
+			return Result.OK("添加成功", encryptedPwd);
 		} catch (Exception e) {
 			log.error("新增学生失败：", e);
 			return Result.error("添加失败：" + e.getMessage());
 		}
 	}
+
 	/**
-	 *  编辑
+	 * 编辑
 	 *
 	 * @param tStudent
 	 * @return
 	 */
 	@AutoLog(value = "学生表-编辑")
-	@Operation(summary="学生表-编辑")
+	@Operation(summary = "学生表-编辑")
 	@RequiresPermissions("zbu:t_student:edit")
-	@RequestMapping(value = "/edit", method = {RequestMethod.PUT,RequestMethod.POST})
+	@RequestMapping(value = "/edit", method = { RequestMethod.PUT, RequestMethod.POST })
 	public Result<String> edit(@RequestBody TStudent tStudent) {
 		tStudentService.updateById(tStudent);
 		return Result.OK("编辑成功!");
 	}
 
 	/**
-	 *   通过id删除
+	 * 通过id删除
 	 *
 	 * @param id
 	 * @return
 	 */
 	@AutoLog(value = "学生表-通过id删除")
-	@Operation(summary="学生表-通过id删除")
+	@Operation(summary = "学生表-通过id删除")
 	@RequiresPermissions("zbu:t_student:delete")
 	@DeleteMapping(value = "/delete")
 	@Transactional(rollbackFor = Exception.class)
-	public Result<String> delete(@RequestParam(name="id",required=true) String id) {
+	public Result<String> delete(@RequestParam(name = "id", required = true) String id) {
 		try {
 			log.info("开始删除学生：id={}", id);
 			// 前置步骤：查询学生获取关联的userId（学生删除特有，其余步骤完全复刻）
@@ -397,11 +401,10 @@ public class TStudentController extends JeecgController<TStudent, ITStudentServi
 
 				// 步骤1：先删关联数据（和你提供的代码完全一致）
 				int delRole = sysUserRoleService.getBaseMapper().delete(
-						new LambdaQueryWrapper<SysUserRole>().eq(SysUserRole::getUserId, userId)
-				);
+						new LambdaQueryWrapper<SysUserRole>().eq(SysUserRole::getUserId, userId));
 				// 注意：如果你的项目没有sysUserDepartService，直接注释这两行！！！
 				// int delDepart = sysUserDepartService.getBaseMapper().delete(
-				//         new LambdaQueryWrapper<SysUserDepart>().eq(SysUserDepart::getUserId, userId)
+				// new LambdaQueryWrapper<SysUserDepart>().eq(SysUserDepart::getUserId, userId)
 				// );
 				int delDepart = 0; // 无sysUserDepartService时，赋值0避免报错
 				log.info("删除关联数据：用户-角色({}条)、用户-部门({}条)", delRole, delDepart);
@@ -412,8 +415,7 @@ public class TStudentController extends JeecgController<TStudent, ITStudentServi
 						new SysUser(),
 						new LambdaUpdateWrapper<SysUser>()
 								.set(SysUser::getDelFlag, "1")
-								.eq(SysUser::getId, userId)
-				);
+								.eq(SysUser::getId, userId));
 				log.info("原生SQL更新del_flag：id={}，影响行数={}", userId, updateDelFlag);
 
 				if (updateDelFlag <= 0) {
@@ -421,8 +423,7 @@ public class TStudentController extends JeecgController<TStudent, ITStudentServi
 					// 直接跳过del_flag，执行终极删除（和你提供的代码完全一致）
 					log.warn("跳过del_flag标记，直接物理删除");
 					int delUser = sysUserMapper.delete(
-							new LambdaQueryWrapper<SysUser>().eq(SysUser::getId, userId)
-					);
+							new LambdaQueryWrapper<SysUser>().eq(SysUser::getId, userId));
 					if (delUser <= 0) {
 						return Result.error("删除失败：用户ID不存在或字段映射错误！");
 					}
@@ -441,6 +442,26 @@ public class TStudentController extends JeecgController<TStudent, ITStudentServi
 				}
 			}
 
+			// 级联删除学生的征订记录、领取记录、账单记录
+			String studentId = student.getId();
+			String studentNo = student.getStudentId(); // 学号，账单表中存储的是学号
+			log.info("开始级联删除学生的业务记录：学生id={}，学号={}", studentId, studentNo);
+
+			// 1. 删除征订表记录（按student_id，即学生主键ID）
+			int delSubscription = tSubscriptionService.getBaseMapper().delete(
+					new LambdaQueryWrapper<TSubscription>().eq(TSubscription::getStudentId, studentId));
+			log.info("删除征订记录：{}条", delSubscription);
+
+			// 2. 删除领取表记录（按receive_operator，即学生id）
+			int delReceive = tReceiveService.getBaseMapper().delete(
+					new LambdaQueryWrapper<TReceive>().eq(TReceive::getReceiveOperator, studentId));
+			log.info("删除领取记录：{}条", delReceive);
+
+			// 3. 删除个人账单记录（按student_id，但账单表存储的是学号studentNo）
+			int delBill = studentBillService.getBaseMapper().delete(
+					new LambdaQueryWrapper<StudentBill>().eq(StudentBill::getStudentId, studentNo));
+			log.info("删除个人账单记录：{}条", delBill);
+
 			// 学生删除特有步骤：物理删除学生表（保持原有校验逻辑）
 			int delStudent = tStudentService.getBaseMapper().deleteById(id);
 			log.info("物理删除学生表记录：id={}，影响行数={}", id, delStudent);
@@ -448,7 +469,7 @@ public class TStudentController extends JeecgController<TStudent, ITStudentServi
 				throw new RuntimeException("学生表记录物理删除失败（无记录被影响）");
 			}
 
-			return Result.OK("删除成功! 数据库中已无该学生及关联用户记录");
+			return Result.OK("删除成功! 数据库中已无该学生及关联用户、征订、领取、账单记录");
 		} catch (Exception e) {
 			log.error("删除学生失败：id={}", id, e);
 			return Result.error("删除失败：" + e.getMessage());
@@ -456,17 +477,17 @@ public class TStudentController extends JeecgController<TStudent, ITStudentServi
 	}
 
 	/**
-	 *  批量删除
+	 * 批量删除
 	 *
 	 * @param ids
 	 * @return
 	 */
 	@AutoLog(value = "学生表-批量删除")
-	@Operation(summary="学生表-批量删除")
+	@Operation(summary = "学生表-批量删除")
 	@RequiresPermissions("zbu:t_student:deleteBatch")
 	@DeleteMapping(value = "/deleteBatch")
 	@Transactional(rollbackFor = Exception.class)
-	public Result<String> deleteBatch(@RequestParam(name="ids",required=true) String ids) {
+	public Result<String> deleteBatch(@RequestParam(name = "ids", required = true) String ids) {
 
 		try {
 			log.info("开始批量删除学生：ids={}", ids);
@@ -498,11 +519,10 @@ public class TStudentController extends JeecgController<TStudent, ITStudentServi
 			if (!userIds.isEmpty()) {
 				// 步骤1：批量删除用户关联数据（角色/部门，和单个删除逻辑一致）
 				int delRole = sysUserRoleService.getBaseMapper().delete(
-						new LambdaQueryWrapper<SysUserRole>().in(SysUserRole::getUserId, userIds)
-				);
+						new LambdaQueryWrapper<SysUserRole>().in(SysUserRole::getUserId, userIds));
 				// 注意：无sysUserDepartService则注释以下两行，赋值delDepart=0
 				// int delDepart = sysUserDepartService.getBaseMapper().delete(
-				//         new LambdaQueryWrapper<SysUserDepart>().in(SysUserDepart::getUserId, userIds)
+				// new LambdaQueryWrapper<SysUserDepart>().in(SysUserDepart::getUserId, userIds)
 				// );
 				int delDepart = 0; // 无用户部门表时赋值0，避免报错
 				log.info("批量删除用户关联数据：角色({}条)、部门({}条)", delRole, delDepart);
@@ -522,8 +542,7 @@ public class TStudentController extends JeecgController<TStudent, ITStudentServi
 					// 兜底：直接批量物理删除用户（和单个删除的兜底逻辑一致）
 					log.warn("跳过del_flag标记，直接批量物理删除用户");
 					int delUsers = sysUserMapper.delete(
-							new LambdaQueryWrapper<SysUser>().in(SysUser::getId, userIds)
-					);
+							new LambdaQueryWrapper<SysUser>().in(SysUser::getId, userIds));
 					if (delUsers <= 0) {
 						log.warn("批量兜底删除用户失败：无用户记录被删除");
 					} else {
@@ -545,6 +564,33 @@ public class TStudentController extends JeecgController<TStudent, ITStudentServi
 				}
 			}
 
+			// 级联删除学生的征订记录、领取记录、账单记录
+			log.info("开始批量级联删除学生的业务记录：学生ids={}", studentIds);
+
+			// 提取所有学生的学号（账单表存储的是学号）
+			List<String> studentNos = students.stream()
+					.map(TStudent::getStudentId)
+					.filter(s -> oConvertUtils.isNotEmpty(s))
+					.collect(Collectors.toList());
+			log.info("待删除学生的学号列表：{}", studentNos);
+
+			// 1. 批量删除征订表记录（按student_id，即学生主键ID）
+			int delSubscription = tSubscriptionService.getBaseMapper().delete(
+					new LambdaQueryWrapper<TSubscription>().in(TSubscription::getStudentId, studentIds));
+			log.info("批量删除征订记录：{}条", delSubscription);
+
+			// 2. 批量删除领取表记录（按receive_operator）
+			int delReceive = tReceiveService.getBaseMapper().delete(
+					new LambdaQueryWrapper<TReceive>().in(TReceive::getReceiveOperator, studentIds));
+			log.info("批量删除领取记录：{}条", delReceive);
+
+			// 3. 批量删除个人账单记录（按student_id，但账单表存储的是学号）
+			if (!studentNos.isEmpty()) {
+				int delBill = studentBillService.getBaseMapper().delete(
+						new LambdaQueryWrapper<StudentBill>().in(StudentBill::getStudentId, studentNos));
+				log.info("批量删除个人账单记录：{}条", delBill);
+			}
+
 			// 5. 批量物理删除学生表（彻底删库记录，替换原逻辑删除）
 			int delStudents = tStudentService.getBaseMapper().deleteBatchIds(studentIds);
 			log.info("批量物理删除学生表记录：待删数量={}, 实际删除行数={}", studentIds.size(), delStudents);
@@ -553,7 +599,7 @@ public class TStudentController extends JeecgController<TStudent, ITStudentServi
 				throw new RuntimeException("学生表批量物理删除失败（无记录被影响）");
 			}
 
-			return Result.OK("批量删除成功! 数据库中已无该批学生及关联用户记录");
+			return Result.OK("批量删除成功! 数据库中已无该批学生及关联用户、征订、领取、账单记录");
 		} catch (Exception e) {
 			log.error("批量删除学生失败：ids={}", ids, e);
 			return Result.error("批量删除失败：" + e.getMessage());
@@ -566,12 +612,12 @@ public class TStudentController extends JeecgController<TStudent, ITStudentServi
 	 * @param id
 	 * @return
 	 */
-	//@AutoLog(value = "学生表-通过id查询")
-	@Operation(summary="学生表-通过id查询")
+	// @AutoLog(value = "学生表-通过id查询")
+	@Operation(summary = "学生表-通过id查询")
 	@GetMapping(value = "/queryById")
-	public Result<TStudent> queryById(@RequestParam(name="id",required=true) String id) {
+	public Result<TStudent> queryById(@RequestParam(name = "id", required = true) String id) {
 		TStudent tStudent = tStudentService.getById(id);
-		if(tStudent==null) {
+		if (tStudent == null) {
 			return Result.error("未找到对应数据");
 		}
 		return Result.OK(tStudent);
@@ -670,8 +716,7 @@ public class TStudentController extends JeecgController<TStudent, ITStudentServi
 				List<TStudent> tempList = ExcelImportUtil.importExcel(
 						file.getInputStream(),
 						TStudent.class,
-						importParams
-				);
+						importParams);
 
 				// 5. 逐行校验+过滤（核心：解决空值问题）
 				for (int i = 0; i < tempList.size(); i++) {
@@ -702,7 +747,6 @@ public class TStudentController extends JeecgController<TStudent, ITStudentServi
 							continue;
 						}
 					}
-
 
 					// 6. 校验学号是否已存在于学生表
 					QueryWrapper<TStudent> studentWrapper = new QueryWrapper<>();
@@ -803,11 +847,10 @@ public class TStudentController extends JeecgController<TStudent, ITStudentServi
 		}
 	}
 
-
 	/**
 	 * 登录后获取当前用户的学生信息
 	 */
-	@Operation(summary="获取当前登录学生的信息")
+	@Operation(summary = "获取当前登录学生的信息")
 	@GetMapping("/getCurrentStudent")
 	public Result<TStudent> getCurrentStudent() {
 		// 1. 获取Shiro当前登录的Subject（核心）
@@ -853,16 +896,15 @@ public class TStudentController extends JeecgController<TStudent, ITStudentServi
 		return Result.OK(student);
 	}
 
-
 	/**
 	 * 按学号查询学生信息
 	 */
 	@GetMapping(value = "/queryByStudentId")
-	public Result<TStudent> queryByStudentId(@RequestParam(name="studentId") String studentId) {
+	public Result<TStudent> queryByStudentId(@RequestParam(name = "studentId") String studentId) {
 		QueryWrapper<TStudent> wrapper = new QueryWrapper<>();
 		wrapper.eq("student_id", studentId);
 		TStudent student = tStudentService.getOne(wrapper);
-		if(student == null) {
+		if (student == null) {
 			return Result.error("未找到对应学生");
 		}
 		return Result.OK(student);
@@ -871,14 +913,14 @@ public class TStudentController extends JeecgController<TStudent, ITStudentServi
 	/**
 	 * 按学号查询学生信息
 	 */
-	@Operation(summary="按学号查询学生信息")
+	@Operation(summary = "按学号查询学生信息")
 	@GetMapping(value = "/queryByNo")
-	public Result<TStudent> queryByNo(@RequestParam(name="studentNo") String studentNo) {
+	public Result<TStudent> queryByNo(@RequestParam(name = "studentNo") String studentNo) {
 		// 核心：查询条件用数据库字段student_id，参数名用studentNo（匹配前端）
 		QueryWrapper<TStudent> wrapper = new QueryWrapper<>();
 		wrapper.eq("student_id", studentNo);
 		TStudent student = tStudentService.getOne(wrapper);
-		if(student == null) {
+		if (student == null) {
 			return Result.error("未找到对应学生");
 		}
 		return Result.OK(student);
@@ -886,6 +928,7 @@ public class TStudentController extends JeecgController<TStudent, ITStudentServi
 
 	/**
 	 * 为单个学生生成征订/领取/账单记录（适配教材选用表已有记录时新增学生的场景）
+	 *
 	 * @param student 新增/导入的学生对象
 	 */
 	private void generateStudentSubscription(TStudent student) {
@@ -936,14 +979,12 @@ public class TStudentController extends JeecgController<TStudent, ITStudentServi
 				tSubscriptionService.save(subscription);
 				log.info("为学生{}生成征订记录：{}", student.getStudentId(), subscription.getId());
 
-
 			}
 		} catch (Exception e) {
 			log.error("为学生{}生成征订记录失败", student.getStudentId(), e);
 			throw new RuntimeException("学生新增成功，但生成教材征订相关记录失败：" + e.getMessage());
 		}
 	}
-
 
 	/**
 	 * 获取所有专业（下拉框专用，无权限拦截）

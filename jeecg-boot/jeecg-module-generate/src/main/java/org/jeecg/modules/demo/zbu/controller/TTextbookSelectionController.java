@@ -773,6 +773,7 @@ public class TTextbookSelectionController extends JeecgController<TTextbookSelec
 
 					// ===== 教材解析（兼容ID/名称） =====
 					String textbookContent = selection.getTextbookId();
+					String textbookIsbn = null;
 					if (oConvertUtils.isEmpty(textbookContent)) {
 						errorMsgList.add("第" + rowNum + "行：教材不能为空");
 						isValid = false;
@@ -781,9 +782,12 @@ public class TTextbookSelectionController extends JeecgController<TTextbookSelec
 							selection.setTextbookId(textbookContent.trim());
 							QueryWrapper<TTextbook> textbookIdWrapper = new QueryWrapper<>();
 							textbookIdWrapper.eq("id", textbookContent.trim());
-							if (tTextbookService.count(textbookIdWrapper) == 0) {
+							TTextbook textbook = tTextbookService.getOne(textbookIdWrapper);
+							if (textbook == null) {
 								errorMsgList.add("第" + rowNum + "行：教材ID「" + textbookContent + "」不存在，请检查");
 								isValid = false;
+							} else {
+								textbookIsbn = textbook.getIsbn();
 							}
 						} else {
 							QueryWrapper<TTextbook> textbookWrapper = new QueryWrapper<>();
@@ -794,7 +798,28 @@ public class TTextbookSelectionController extends JeecgController<TTextbookSelec
 								isValid = false;
 							} else {
 								selection.setTextbookId(textbook.getId());
+								textbookIsbn = textbook.getIsbn();
 							}
+						}
+					}
+
+					// ===== 查重：学年+学期+ISBN+专业+班级 =====
+					if (isValid && oConvertUtils.isNotEmpty(textbookIsbn)) {
+						QueryWrapper<TTextbookSelection> dupWrapper = new QueryWrapper<>();
+						dupWrapper.eq("school_year", selection.getSchoolYear())
+								.eq("semester", selection.getSemester())
+								.eq("textbook_id", selection.getTextbookId())
+								.eq("major_id", selection.getMajorId())
+								.eq("class_id", selection.getClassId());
+						long dupCount = tTextbookSelectionService.count(dupWrapper);
+						if (dupCount > 0) {
+							errorMsgList.add("第" + rowNum + "行：重复记录（学年=" + selection.getSchoolYear()
+									+ "，学期=" + selection.getSemester()
+									+ "，ISBN=" + textbookIsbn
+									+ "，专业=" + selection.getMajorId()
+									+ "，班级=" + selection.getClassId()
+									+ "）已存在，跳过");
+							isValid = false;
 						}
 					}
 

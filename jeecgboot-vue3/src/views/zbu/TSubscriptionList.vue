@@ -2,7 +2,7 @@
   <div>
     <BasicTable
       @register="registerTable"
-      :rowSelection="rowSelection"
+      :rowSelection="tableRowSelection"
       :form-config="tableFormConfig"
     >
       <template #tableTitle>
@@ -361,6 +361,14 @@ const { prefixCls, tableContext, onExportXls, onImportXls } = useListPage({
 
 // 解构tableContext
 const [registerTable, {reload}, { rowSelection, selectedRowKeys }] = tableContext;
+
+// 学生端隐藏复选框
+const tableRowSelection = computed(() => {
+  if (unref(isStudent)) {
+    return undefined;
+  }
+  return rowSelection;
+});
 const superQueryConfig = reactive(superQuerySchema);
 
 // ==========  修改4：批量修改征订状态（支持所有角色） ==========

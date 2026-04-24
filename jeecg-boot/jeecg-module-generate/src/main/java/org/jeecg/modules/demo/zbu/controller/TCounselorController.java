@@ -18,7 +18,9 @@ import org.jeecg.common.util.PasswordUtil;
 import org.jeecg.common.util.oConvertUtils;
 import org.jeecg.modules.base.service.BaseCommonService;
 import org.jeecg.modules.demo.zbu.entity.TCounselor;
+import org.jeecg.modules.demo.zbu.entity.TCollege;
 import org.jeecg.modules.demo.zbu.service.ITCounselorService;
+import org.jeecg.modules.demo.zbu.service.ITCollegeService;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
@@ -62,6 +64,8 @@ import org.apache.shiro.authz.annotation.RequiresPermissions;
 public class TCounselorController extends JeecgController<TCounselor, ITCounselorService> {
 	@Autowired
 	private ITCounselorService tCounselorService;
+	@Autowired
+	private ITCollegeService tCollegeService;
 	@Autowired
 	private ISysUserService sysUserService;
 	@Autowired
@@ -464,6 +468,29 @@ public class TCounselorController extends JeecgController<TCounselor, ITCounselo
 					}
 					counselor.setCounselorName(counselorName.trim());
 
+					// 5.3 学院校验：必须为学院表中已存在的学院
+					String collegeId = counselor.getCollegeId();
+					if (oConvertUtils.isEmpty(collegeId) || collegeId.trim().isEmpty()) {
+						failMsgList.add("第" + totalRow + "行：所属学院为空（工号：" + counselorId + "），跳过导入");
+						continue;
+					}
+					// 校验学院是否存在（支持ID或名称查询）
+					TCollege college = null;
+					if (collegeId.matches("^\\d{16,}$")) {
+						// 按ID查询
+						college = tCollegeService.getById(collegeId.trim());
+					}
+					if (college == null) {
+						// 按学院名称查询
+						college = tCollegeService.getOne(new LambdaQueryWrapper<TCollege>()
+								.eq(TCollege::getCollegeName, collegeId.trim()));
+					}
+					if (college == null) {
+						failMsgList.add("第" + totalRow + "行：学院【" + collegeId + "】不存在于学院表中（工号：" + counselorId + "），跳过导入");
+						continue;
+					}
+					// 使用学院表中的ID
+					counselor.setCollegeId(college.getId());
 
 					// 6. 校验工号是否已存在于辅导员表
 					QueryWrapper<TCounselor> counselorWrapper = new QueryWrapper<>();
