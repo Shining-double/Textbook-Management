@@ -12,7 +12,9 @@ import org.jeecg.common.system.query.QueryGenerator;
 import org.jeecg.common.system.query.QueryRuleEnum;
 import org.jeecg.common.util.oConvertUtils;
 import org.jeecg.modules.demo.zbu.entity.TMajor;
+import org.jeecg.modules.demo.zbu.entity.TCollege;
 import org.jeecg.modules.demo.zbu.service.ITMajorService;
+import org.jeecg.modules.demo.zbu.service.ITCollegeService;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
@@ -35,20 +37,23 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import io.swagger.v3.oas.annotations.Operation;
 import org.jeecg.common.aspect.annotation.AutoLog;
 import org.apache.shiro.authz.annotation.RequiresPermissions;
- /**
+
+/**
  * @Description: 专业表
  * @Author: jeecg-boot
- * @Date:   2026-01-19
+ * @Date: 2026-01-19
  * @Version: V1.0
  */
-@Tag(name="专业表")
+@Tag(name = "专业表")
 @RestController
 @RequestMapping("/zbu/tMajor")
 @Slf4j
 public class TMajorController extends JeecgController<TMajor, ITMajorService> {
 	@Autowired
 	private ITMajorService tMajorService;
-	
+	@Autowired
+	private ITCollegeService tCollegeService;
+
 	/**
 	 * 分页列表查询
 	 *
@@ -58,40 +63,36 @@ public class TMajorController extends JeecgController<TMajor, ITMajorService> {
 	 * @param req
 	 * @return
 	 */
-	//@AutoLog(value = "专业表-分页列表查询")
-	@Operation(summary="专业表-分页列表查询")
+	@Operation(summary = "专业表-分页列表查询")
 	@GetMapping(value = "/list")
 	public Result<IPage<TMajor>> queryPageList(TMajor tMajor,
-								   @RequestParam(name="pageNo", defaultValue="1") Integer pageNo,
-								   @RequestParam(name="pageSize", defaultValue="10") Integer pageSize,
-								   HttpServletRequest req) {
+											   @RequestParam(name = "pageNo", defaultValue = "1") Integer pageNo,
+											   @RequestParam(name = "pageSize", defaultValue = "10") Integer pageSize,
+											   HttpServletRequest req) {
 
-
-        QueryWrapper<TMajor> queryWrapper = QueryGenerator.initQueryWrapper(tMajor, req.getParameterMap());
+		QueryWrapper<TMajor> queryWrapper = QueryGenerator.initQueryWrapper(tMajor, req.getParameterMap());
 		Page<TMajor> page = new Page<TMajor>(pageNo, pageSize);
 		IPage<TMajor> pageList = tMajorService.page(page, queryWrapper);
 		return Result.OK(pageList);
 	}
-	
+
 	/**
-	 *   添加
+	 * 添加
 	 *
 	 * @param tMajor
 	 * @return
 	 */
 	@AutoLog(value = "专业表-添加")
-	@Operation(summary="专业表-添加")
+	@Operation(summary = "专业表-添加")
 	@RequiresPermissions("zbu:t_major:add")
 	@PostMapping(value = "/add")
 	public Result<String> add(@RequestBody TMajor tMajor) {
-		// 检查专业编码是否已存在
 		QueryWrapper<TMajor> codeWrapper = new QueryWrapper<>();
 		codeWrapper.eq("major_code", tMajor.getMajorCode());
 		if (tMajorService.count(codeWrapper) > 0) {
 			return Result.error("添加失败：专业编码已存在！");
 		}
 
-		// 检查专业名称是否已存在
 		QueryWrapper<TMajor> nameWrapper = new QueryWrapper<>();
 		nameWrapper.eq("major_name", tMajor.getMajorName());
 		if (tMajorService.count(nameWrapper) > 0) {
@@ -101,129 +102,84 @@ public class TMajorController extends JeecgController<TMajor, ITMajorService> {
 
 		return Result.OK("添加成功！");
 	}
-	
-	/**
-	 *  编辑
-	 *
-	 * @param tMajor
-	 * @return
-	 */
+
 	@AutoLog(value = "专业表-编辑")
-	@Operation(summary="专业表-编辑")
+	@Operation(summary = "专业表-编辑")
 	@RequiresPermissions("zbu:t_major:edit")
-	@RequestMapping(value = "/edit", method = {RequestMethod.PUT,RequestMethod.POST})
+	@RequestMapping(value = "/edit", method = { RequestMethod.PUT, RequestMethod.POST })
 	public Result<String> edit(@RequestBody TMajor tMajor) {
 		tMajorService.updateById(tMajor);
 		return Result.OK("编辑成功!");
 	}
-	
-	/**
-	 *   通过id删除
-	 *
-	 * @param id
-	 * @return
-	 */
+
 	@AutoLog(value = "专业表-通过id删除")
-	@Operation(summary="专业表-通过id删除")
+	@Operation(summary = "专业表-通过id删除")
 	@RequiresPermissions("zbu:t_major:delete")
 	@DeleteMapping(value = "/delete")
-	public Result<String> delete(@RequestParam(name="id",required=true) String id) {
+	public Result<String> delete(@RequestParam(name = "id", required = true) String id) {
 		tMajorService.removeById(id);
 		return Result.OK("删除成功!");
 	}
-	
-	/**
-	 *  批量删除
-	 *
-	 * @param ids
-	 * @return
-	 */
+
 	@AutoLog(value = "专业表-批量删除")
-	@Operation(summary="专业表-批量删除")
+	@Operation(summary = "专业表-批量删除")
 	@RequiresPermissions("zbu:t_major:deleteBatch")
 	@DeleteMapping(value = "/deleteBatch")
-	public Result<String> deleteBatch(@RequestParam(name="ids",required=true) String ids) {
+	public Result<String> deleteBatch(@RequestParam(name = "ids", required = true) String ids) {
 		this.tMajorService.removeByIds(Arrays.asList(ids.split(",")));
 		return Result.OK("批量删除成功!");
 	}
-	
-	/**
-	 * 通过id查询
-	 *
-	 * @param id
-	 * @return
-	 */
-	//@AutoLog(value = "专业表-通过id查询")
-	@Operation(summary="专业表-通过id查询")
+
+	@Operation(summary = "专业表-通过id查询")
 	@GetMapping(value = "/queryById")
-	public Result<TMajor> queryById(@RequestParam(name="id",required=true) String id) {
+	public Result<TMajor> queryById(@RequestParam(name = "id", required = true) String id) {
 		TMajor tMajor = tMajorService.getById(id);
-		if(tMajor==null) {
+		if (tMajor == null) {
 			return Result.error("未找到对应数据");
 		}
 		return Result.OK(tMajor);
 	}
 
-    /**
-    * 导出excel
-    *
-    * @param request
-    * @param tMajor
-    */
-    @RequiresPermissions("zbu:t_major:exportXls")
-    @RequestMapping(value = "/exportXls")
-    public ModelAndView exportXls(HttpServletRequest request, TMajor tMajor) {
-        return super.exportXls(request, tMajor, TMajor.class, "专业表");
-    }
+	@RequiresPermissions("zbu:t_major:exportXls")
+	@RequestMapping(value = "/exportXls")
+	public ModelAndView exportXls(HttpServletRequest request, TMajor tMajor) {
+		return super.exportXls(request, tMajor, TMajor.class, "专业表");
+	}
 
-    /**
-      * 通过excel导入数据
-    *
-    * @param request
-    * @param response
-    * @return
-    */
-    @RequiresPermissions("zbu:t_major:importExcel")
-    @RequestMapping(value = "/importExcel", method = RequestMethod.POST)
-    public Result<?> importExcel(HttpServletRequest request, HttpServletResponse response) {
+	@RequiresPermissions("zbu:t_major:importExcel")
+	@RequestMapping(value = "/importExcel", method = RequestMethod.POST)
+	public Result<?> importExcel(HttpServletRequest request, HttpServletResponse response) {
 		try {
-			// 1. 获取上传的Excel文件
 			MultipartHttpServletRequest multipartRequest = (MultipartHttpServletRequest) request;
 			Map<String, MultipartFile> fileMap = multipartRequest.getFileMap();
 			if (fileMap.isEmpty()) {
 				return Result.error("请选择要导入的Excel文件！");
 			}
 
-			// 2. 基础导入参数配置
 			ImportParams importParams = new ImportParams();
-			importParams.setTitleRows(2); // 标题行数量
-			importParams.setHeadRows(1); // 表头行数量
+			importParams.setTitleRows(2);
+			importParams.setHeadRows(1);
 			importParams.setNeedSave(false);
 
-			// 存储有效数据和失败信息
 			List<TMajor> validMajorList = new ArrayList<>();
 			List<String> failMsgList = new ArrayList<>();
 			int totalRow = 0;
 
-			// 3. 遍历解析Excel文件
 			for (Map.Entry<String, MultipartFile> entry : fileMap.entrySet()) {
 				MultipartFile file = entry.getValue();
 				if (file.isEmpty()) {
 					continue;
 				}
 
-				// 4. 解析Excel为专业列表
 				List<TMajor> tempList = ExcelImportUtil.importExcel(
 						file.getInputStream(),
 						TMajor.class,
 						importParams);
 
-				// 5. 逐行校验+过滤
 				for (int i = 0; i < tempList.size(); i++) {
-					totalRow = i + 2; // Excel行号（标题+表头后从第2行开始）
+					totalRow = i + 2;
 					TMajor major = tempList.get(i);
 
-					// 5.1 专业编码空值校验
 					String majorCode = major.getMajorCode();
 					if (oConvertUtils.isEmpty(majorCode) || majorCode.trim().isEmpty()) {
 						failMsgList.add("第" + totalRow + "行：专业编码为空，跳过导入");
@@ -231,7 +187,6 @@ public class TMajorController extends JeecgController<TMajor, ITMajorService> {
 					}
 					major.setMajorCode(majorCode.trim());
 
-					// 5.2 专业名称空值校验
 					String majorName = major.getMajorName();
 					if (oConvertUtils.isEmpty(majorName) || majorName.trim().isEmpty()) {
 						failMsgList.add("第" + totalRow + "行：专业名称为空（编码：" + majorCode + "），跳过导入");
@@ -239,13 +194,17 @@ public class TMajorController extends JeecgController<TMajor, ITMajorService> {
 					}
 					major.setMajorName(majorName.trim());
 
-					// 5.3 所属学院空值校验
 					if (oConvertUtils.isEmpty(major.getCollegeId())) {
 						failMsgList.add("第" + totalRow + "行：所属学院为空（编码：" + majorCode + "），跳过导入");
 						continue;
 					}
 
-					// 6. 检查专业编码是否已存在
+					TCollege college = tCollegeService.getById(major.getCollegeId());
+					if (college == null) {
+						failMsgList.add("第" + totalRow + "行：所属学院ID【" + major.getCollegeId() + "】不存在（编码：" + majorCode + "），跳过导入");
+						continue;
+					}
+
 					QueryWrapper<TMajor> codeWrapper = new QueryWrapper<>();
 					codeWrapper.eq("major_code", major.getMajorCode());
 					if (tMajorService.count(codeWrapper) > 0) {
@@ -253,7 +212,6 @@ public class TMajorController extends JeecgController<TMajor, ITMajorService> {
 						continue;
 					}
 
-					// 7. 检查专业名称是否已存在
 					QueryWrapper<TMajor> nameWrapper = new QueryWrapper<>();
 					nameWrapper.eq("major_name", major.getMajorName());
 					if (tMajorService.count(nameWrapper) > 0) {
@@ -261,18 +219,15 @@ public class TMajorController extends JeecgController<TMajor, ITMajorService> {
 						continue;
 					}
 
-					// 8. 加入有效列表
 					major.setCreateTime(new Date());
 					validMajorList.add(major);
 				}
 			}
 
-			// 9. 批量保存有效数据
 			if (!validMajorList.isEmpty()) {
 				tMajorService.saveBatch(validMajorList);
 			}
 
-			// 10. 构建返回结果
 			StringBuilder result = new StringBuilder();
 			result.append("导入完成！成功导入【").append(validMajorList.size()).append("】条有效数据");
 			if (!failMsgList.isEmpty()) {
@@ -295,6 +250,6 @@ public class TMajorController extends JeecgController<TMajor, ITMajorService> {
 			return Result.error("导入失败：" + e.getMessage());
 		}
 
-    }
+	}
 
 }

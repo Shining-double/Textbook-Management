@@ -343,6 +343,140 @@ public class StudentBillController extends JeecgController<StudentBill, IStudent
 	}
 
 	/**
+	 * 导出账单汇总
+	 *
+	 * @param request
+	 * @param studentNo
+	 * @param studentName
+	 * @param className
+	 * @param majorName
+	 * @param schoolYear
+	 * @param semester
+	 * @return
+	 */
+	@RequiresPermissions("zbu:student_bill:exportXls")
+	@RequestMapping(value = "/exportSummary")
+	public ModelAndView exportSummary(
+			HttpServletRequest request,
+			@RequestParam(name = "studentNo", required = false) String studentNo,
+			@RequestParam(name = "studentName", required = false) String studentName,
+			@RequestParam(name = "className", required = false) String className,
+			@RequestParam(name = "majorName", required = false) String majorName,
+			@RequestParam(name = "schoolYear", required = false) String schoolYear,
+			@RequestParam(name = "semester", required = false) String semester) {
+
+		ModelAndView mv = new ModelAndView(new JeecgEntityExcelView());
+		ExportParams exportParams = new ExportParams("账单汇总", "账单汇总数据");
+		mv.addObject(NormalExcelConstants.PARAMS, exportParams);
+		mv.addObject(NormalExcelConstants.CLASS, StudentBillSummary.class);
+
+		// 构建基础SQL
+		String baseSql = "SELECT * FROM v_student_bill_summary WHERE 1=1";
+
+		// 辅导员过滤
+		LoginUser loginUser = (LoginUser) SecurityUtils.getSubject().getPrincipal();
+		if (loginUser != null) {
+			String userRoleType = getUserRoleType(loginUser.getId());
+			if (COUNSELOR_ROLE_CODE.equals(userRoleType)) {
+				List<String> studentIds = getCounselorStudentIds(loginUser.getId());
+				if (!studentIds.isEmpty()) {
+					String studentIdInClause = studentIds.stream()
+							.map(id -> "'" + id + "'")
+							.collect(Collectors.joining(","));
+					baseSql += " AND studentId IN (" + studentIdInClause + ")";
+				} else {
+					baseSql += " AND 1=0";
+				}
+			}
+		}
+
+		// 查询条件
+		if (oConvertUtils.isNotEmpty(studentNo)) {
+			baseSql += " AND studentNo LIKE '%" + studentNo + "%'";
+		}
+		if (oConvertUtils.isNotEmpty(studentName)) {
+			baseSql += " AND studentName LIKE '%" + studentName + "%'";
+		}
+		if (oConvertUtils.isNotEmpty(className)) {
+			baseSql += " AND className LIKE '%" + className + "%'";
+		}
+		if (oConvertUtils.isNotEmpty(majorName)) {
+			baseSql += " AND majorName LIKE '%" + majorName + "%'";
+		}
+		if (oConvertUtils.isNotEmpty(schoolYear)) {
+			baseSql += " AND schoolYear = '" + schoolYear + "'";
+		}
+		if (oConvertUtils.isNotEmpty(semester)) {
+			baseSql += " AND semester = '" + semester + "'";
+		}
+
+		baseSql += " ORDER BY studentId, schoolYear DESC, semester";
+
+		// 执行查询
+		List<Map<String, Object>> rawList = jdbcTemplate.queryForList(baseSql);
+
+		// 转换为导出实体
+		List<StudentBillSummary> list = new ArrayList<>();
+		BigDecimal totalDiscountPrice = BigDecimal.ZERO;
+
+		for (Map<String, Object> record : rawList) {
+			StudentBillSummary summary = new StudentBillSummary();
+
+			Object studentNoObj = record.get("studentNo");
+			if (studentNoObj != null) summary.setStudentNo(studentNoObj.toString());
+
+			Object studentNameObj = record.get("studentName");
+			if (studentNameObj != null) summary.setStudentName(studentNameObj.toString());
+
+			Object classNameObj = record.get("className");
+			if (classNameObj != null) summary.setClassName(classNameObj.toString());
+
+			Object majorNameObj = record.get("majorName");
+			if (majorNameObj != null) summary.setMajorName(majorNameObj.toString());
+
+			Object schoolYearObj = record.get("schoolYear");
+			if (schoolYearObj != null) summary.setSchoolYear(schoolYearObj.toString());
+
+			Object semesterObj = record.get("semester");
+			if (semesterObj != null) {
+				String sem = semesterObj.toString();
+				if ("1".equals(sem)) {
+					summary.setSemester("第一学期");
+				} else if ("2".equals(sem)) {
+					summary.setSemester("第二学期");
+				} else {
+					summary.setSemester(sem);
+				}
+			}
+
+			Object totalDiscountPriceObj = record.get("totalDiscountPrice");
+			if (totalDiscountPriceObj != null) {
+				BigDecimal price = new BigDecimal(totalDiscountPriceObj.toString());
+				summary.setTotalDiscountPrice(price);
+				totalDiscountPrice = totalDiscountPrice.add(price);
+			}
+
+			list.add(summary);
+		}
+
+		// 添加合计行
+		if (!list.isEmpty()) {
+			StudentBillSummary summaryTotal = new StudentBillSummary();
+			summaryTotal.setStudentNo("");
+			summaryTotal.setStudentName("合计");
+			summaryTotal.setClassName("");
+			summaryTotal.setMajorName("");
+			summaryTotal.setSchoolYear("");
+			summaryTotal.setSemester("");
+			summaryTotal.setTotalDiscountPrice(totalDiscountPrice);
+			list.add(summaryTotal);
+		}
+
+		mv.addObject(NormalExcelConstants.DATA_LIST, list);
+		return mv;
+	}
+
+	/**
 	 *
 	 * @param studentBill
 	 * @param pageNo
@@ -365,7 +499,43 @@ public class StudentBillController extends JeecgController<StudentBill, IStudent
 			paramMap.remove("className");
 		}
 
+		// 提取排序参数并移除，避免QueryGenerator报错
+		String column = req.getParameter("column");
+		String order = req.getParameter("order");
+		paramMap.remove("column");
+		paramMap.remove("order");
+
 		QueryWrapper<StudentBill> queryWrapper = QueryGenerator.initQueryWrapper(studentBill, paramMap);
+
+		// 手动处理排序（因为有些字段不在student_bill表中，需要通过关联查询）
+		Map<String, String> columnMapping = new HashMap<>();
+		columnMapping.put("studentNo", "student_id");
+		columnMapping.put("studentId", "student_id");
+		columnMapping.put("className", "student_id");
+		columnMapping.put("majorName", "major_name");
+		columnMapping.put("textbookName", "textbook_name");
+		columnMapping.put("isbn", "textbook_name");
+		columnMapping.put("subscriptionYear", "subscription_year");
+		columnMapping.put("subscriptionSemester", "subscription_semester");
+		columnMapping.put("price", "price");
+		columnMapping.put("discountPrice", "discount_price");
+		columnMapping.put("subscribeStatus", "subscribe_status");
+		columnMapping.put("receiveStatus", "receive_status");
+		columnMapping.put("remark", "remark");
+		columnMapping.put("createTime", "create_time");
+		columnMapping.put("updateTime", "update_time");
+
+		if (oConvertUtils.isNotEmpty(column) && columnMapping.containsKey(column)) {
+			String dbColumn = columnMapping.get(column);
+			String orderUpper = oConvertUtils.isNotEmpty(order) ? order.toUpperCase() : "DESC";
+			if ("ASC".equals(orderUpper)) {
+				queryWrapper.orderByAsc(dbColumn);
+			} else {
+				queryWrapper.orderByDesc(dbColumn);
+			}
+		} else {
+			queryWrapper.orderByDesc("create_time");
+		}
 
 		// 如果有班级名称搜索条件，添加子查询
 		if (className != null && !className.isEmpty()) {
@@ -540,7 +710,49 @@ public class StudentBillController extends JeecgController<StudentBill, IStudent
 	@RequiresPermissions("zbu:student_bill:exportXls")
 	@RequestMapping(value = "/exportXls")
 	public ModelAndView exportXls(HttpServletRequest request, StudentBill studentBill) {
-		return super.exportXls(request, studentBill, StudentBill.class, "个人账单");
+		ModelAndView mv = new ModelAndView(new JeecgEntityExcelView());
+		ExportParams exportParams = new ExportParams("个人账单", "个人账单数据");
+		mv.addObject(NormalExcelConstants.PARAMS, exportParams);
+		mv.addObject(NormalExcelConstants.CLASS, StudentBill.class);
+
+		// 1. 获取原始数据
+		QueryWrapper<StudentBill> queryWrapper = QueryGenerator.initQueryWrapper(studentBill, request.getParameterMap());
+
+		// 2. 判断是否是管理员
+		LoginUser loginUser = (LoginUser) SecurityUtils.getSubject().getPrincipal();
+		String username = loginUser != null ? loginUser.getUsername() : "";
+		boolean isAdmin = "admin".equals(username) || "sysadmin".equals(username);
+
+		// 3. 非管理员（学生）：强制过滤
+		if (!isAdmin) {
+			queryWrapper.clear();
+			queryWrapper.eq("student_id", username);
+			queryWrapper.orderByDesc("create_time");
+		}
+
+		List<StudentBill> list = studentBillService.list(queryWrapper);
+
+		// 4. 填充学生姓名、ISBN、班级名称
+		for (StudentBill bill : list) {
+			// 填充学生姓名
+			String studentId = bill.getStudentId();
+			if (oConvertUtils.isNotEmpty(studentId)) {
+				try {
+					// 注意：studentBill.studentId 存的是学号（student_id字段），不是TStudent的主键id
+					TStudent student = tStudentService.lambdaQuery()
+							.eq(TStudent::getStudentId, studentId)
+							.one();
+					if (student != null) {
+						bill.setStudentName(student.getStudentName());
+					}
+				} catch (Exception e) {
+					log.warn("查询学生姓名失败：{}", e.getMessage());
+				}
+			}
+		}
+
+		mv.addObject(NormalExcelConstants.DATA_LIST, list);
+		return mv;
 	}
 
 	/**

@@ -11,10 +11,7 @@
       }"
     >
       <template #tableTitle>
-        <div style="font-size: 16px; font-weight: bold;">
-          学生账单汇总
-        </div>
-
+        <a-button  type="primary" v-auth="'zbu:student_bill:exportXls'" preIcon="ant-design:export-outlined" @click="onExportXls"> 导出</a-button>
         <a-dropdown v-if="selectedRowKeys.length > 0">
           <template #overlay>
             <a-menu>
@@ -24,7 +21,7 @@
               </a-menu-item>
             </a-menu>
           </template>
-          <a-button>批量操作
+          <a-button v-auth="'zbu:student_bill:deleteBatch'">批量操作
             <Icon icon="mdi:chevron-down"></Icon>
           </a-button>
         </a-dropdown>
@@ -65,6 +62,7 @@ import {columns, searchFormSchema} from './StudentBillSummary.data';
 import {summaryList, batchDelete} from './StudentBillSummary.api';
 import {useUserStore} from '/@/store/modules/user';
 import {useMessage} from '/@/hooks/web/useMessage';
+import { filterObj } from '/@/utils/common/compUtils';
 
 type Recordable = {[key: string]: any};
 const tableData = ref<Recordable[]>([]);
@@ -82,7 +80,16 @@ const searchParams = reactive({
   semester: '',
 });
 
-const {prefix, tableContext} = useListPage({
+const {prefix, tableContext, onExportXls} = useListPage({
+  exportConfig: {
+    url: '/zbu/studentBill/exportSummary',
+    name: '学生账单汇总',
+    params: () => {
+      return filterObj(searchParams, (key, value) => {
+        return value !== '' && value !== undefined && value !== null;
+      });
+    },
+  },
   tableProps: {
     title: '学生账单汇总',
     api: async (params) => {

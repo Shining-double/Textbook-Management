@@ -127,8 +127,31 @@ public class TTextbookSelectionController extends JeecgController<TTextbookSelec
 			countSql += " AND selectionStatus LIKE '%" + tTextbookSelection.getSelectionStatus() + "%'";
 		}
 
-		// 添加排序
-		baseSql += " ORDER BY createTime DESC";
+		// 添加排序（支持动态排序）
+		String column = req.getParameter("column");
+		String order = req.getParameter("order");
+		if (oConvertUtils.isNotEmpty(column) && oConvertUtils.isNotEmpty(order)) {
+			// 白名单校验，防止SQL注入
+			Set<String> allowedColumns = new HashSet<>(Arrays.asList(
+					"majorId", "majorName", "classId", "className",
+					"textbookId", "textbookName", "isbn", "schoolYear",
+					"semester", "selectionStatus", "createTime", "updateTime",
+					"id", "quantity", "price", "totalPrice"
+			));
+			if (allowedColumns.contains(column)) {
+				// 只允许asc或desc
+				String orderUpper = order.toUpperCase();
+				if ("ASC".equals(orderUpper) || "DESC".equals(orderUpper)) {
+					baseSql += " ORDER BY " + column + " " + orderUpper;
+				} else {
+					baseSql += " ORDER BY createTime DESC";
+				}
+			} else {
+				baseSql += " ORDER BY createTime DESC";
+			}
+		} else {
+			baseSql += " ORDER BY createTime DESC";
+		}
 
 		// 添加分页
 		int offset = (pageNo - 1) * pageSize;

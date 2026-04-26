@@ -8,8 +8,10 @@ import java.net.URLDecoder;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.jeecg.common.api.vo.Result;
+import org.jeecg.common.constant.CacheConstant;
 import org.jeecg.common.system.query.QueryGenerator;
 import org.jeecg.common.system.query.QueryRuleEnum;
+import org.jeecg.common.util.RedisUtil;
 import org.jeecg.common.util.oConvertUtils;
 import org.jeecg.modules.demo.zbu.entity.TCollege;
 import org.jeecg.modules.demo.zbu.service.ITCollegeService;
@@ -35,7 +37,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import io.swagger.v3.oas.annotations.Operation;
 import org.jeecg.common.aspect.annotation.AutoLog;
 import org.apache.shiro.authz.annotation.RequiresPermissions;
- /**
+/**
  * @Description: 学院表
  * @Author: jeecg-boot
  * @Date:   2026-01-19
@@ -48,7 +50,9 @@ import org.apache.shiro.authz.annotation.RequiresPermissions;
 public class TCollegeController extends JeecgController<TCollege, ITCollegeService> {
 	@Autowired
 	private ITCollegeService tCollegeService;
-	
+	@Autowired
+	private RedisUtil redisUtil;
+
 	/**
 	 * 分页列表查询
 	 *
@@ -62,17 +66,17 @@ public class TCollegeController extends JeecgController<TCollege, ITCollegeServi
 	@Operation(summary="学院表-分页列表查询")
 	@GetMapping(value = "/list")
 	public Result<IPage<TCollege>> queryPageList(TCollege tCollege,
-								   @RequestParam(name="pageNo", defaultValue="1") Integer pageNo,
-								   @RequestParam(name="pageSize", defaultValue="10") Integer pageSize,
-								   HttpServletRequest req) {
+												 @RequestParam(name="pageNo", defaultValue="1") Integer pageNo,
+												 @RequestParam(name="pageSize", defaultValue="10") Integer pageSize,
+												 HttpServletRequest req) {
 
 
-        QueryWrapper<TCollege> queryWrapper = QueryGenerator.initQueryWrapper(tCollege, req.getParameterMap());
+		QueryWrapper<TCollege> queryWrapper = QueryGenerator.initQueryWrapper(tCollege, req.getParameterMap());
 		Page<TCollege> page = new Page<TCollege>(pageNo, pageSize);
 		IPage<TCollege> pageList = tCollegeService.page(page, queryWrapper);
 		return Result.OK(pageList);
 	}
-	
+
 	/**
 	 *   添加
 	 *
@@ -102,7 +106,7 @@ public class TCollegeController extends JeecgController<TCollege, ITCollegeServi
 
 		return Result.OK("添加成功！");
 	}
-	
+
 	/**
 	 *  编辑
 	 *
@@ -115,9 +119,11 @@ public class TCollegeController extends JeecgController<TCollege, ITCollegeServi
 	@RequestMapping(value = "/edit", method = {RequestMethod.PUT,RequestMethod.POST})
 	public Result<String> edit(@RequestBody TCollege tCollege) {
 		tCollegeService.updateById(tCollege);
+		// 清除字典缓存，确保专业表中的学院名称实时刷新
+		redisUtil.removeAll(CacheConstant.SYS_DICT_TABLE_CACHE);
 		return Result.OK("编辑成功!");
 	}
-	
+
 	/**
 	 *   通过id删除
 	 *
@@ -130,9 +136,11 @@ public class TCollegeController extends JeecgController<TCollege, ITCollegeServi
 	@DeleteMapping(value = "/delete")
 	public Result<String> delete(@RequestParam(name="id",required=true) String id) {
 		tCollegeService.removeById(id);
+		// 清除字典缓存
+		redisUtil.removeAll(CacheConstant.SYS_DICT_TABLE_CACHE);
 		return Result.OK("删除成功!");
 	}
-	
+
 	/**
 	 *  批量删除
 	 *
@@ -145,9 +153,11 @@ public class TCollegeController extends JeecgController<TCollege, ITCollegeServi
 	@DeleteMapping(value = "/deleteBatch")
 	public Result<String> deleteBatch(@RequestParam(name="ids",required=true) String ids) {
 		this.tCollegeService.removeByIds(Arrays.asList(ids.split(",")));
+		// 清除字典缓存
+		redisUtil.removeAll(CacheConstant.SYS_DICT_TABLE_CACHE);
 		return Result.OK("批量删除成功!");
 	}
-	
+
 	/**
 	 * 通过id查询
 	 *
@@ -165,28 +175,28 @@ public class TCollegeController extends JeecgController<TCollege, ITCollegeServi
 		return Result.OK(tCollege);
 	}
 
-    /**
-    * 导出excel
-    *
-    * @param request
-    * @param tCollege
-    */
-    @RequiresPermissions("zbu:t_college:exportXls")
-    @RequestMapping(value = "/exportXls")
-    public ModelAndView exportXls(HttpServletRequest request, TCollege tCollege) {
-        return super.exportXls(request, tCollege, TCollege.class, "学院表");
-    }
+	/**
+	 * 导出excel
+	 *
+	 * @param request
+	 * @param tCollege
+	 */
+	@RequiresPermissions("zbu:t_college:exportXls")
+	@RequestMapping(value = "/exportXls")
+	public ModelAndView exportXls(HttpServletRequest request, TCollege tCollege) {
+		return super.exportXls(request, tCollege, TCollege.class, "学院表");
+	}
 
-    /**
-      * 通过excel导入数据
-    *
-    * @param request
-    * @param response
-    * @return
-    */
-    @RequiresPermissions("zbu:t_college:importExcel")
-    @RequestMapping(value = "/importExcel", method = RequestMethod.POST)
-    public Result<?> importExcel(HttpServletRequest request, HttpServletResponse response) {
+	/**
+	 * 通过excel导入数据
+	 *
+	 * @param request
+	 * @param response
+	 * @return
+	 */
+	@RequiresPermissions("zbu:t_college:importExcel")
+	@RequestMapping(value = "/importExcel", method = RequestMethod.POST)
+	public Result<?> importExcel(HttpServletRequest request, HttpServletResponse response) {
 		try {
 			// 1. 获取上传的Excel文件
 			MultipartHttpServletRequest multipartRequest = (MultipartHttpServletRequest) request;
@@ -289,6 +299,6 @@ public class TCollegeController extends JeecgController<TCollege, ITCollegeServi
 			log.error("Excel导入学院数据失败", e);
 			return Result.error("导入失败：" + e.getMessage());
 		}
-    }
+	}
 
 }

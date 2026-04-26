@@ -12,7 +12,11 @@ import org.jeecg.common.system.query.QueryGenerator;
 import org.jeecg.common.system.query.QueryRuleEnum;
 import org.jeecg.common.util.oConvertUtils;
 import org.jeecg.modules.demo.zbu.entity.TClass;
+import org.jeecg.modules.demo.zbu.entity.TMajor;
+import org.jeecg.modules.demo.zbu.entity.TCounselor;
 import org.jeecg.modules.demo.zbu.service.ITClassService;
+import org.jeecg.modules.demo.zbu.service.ITMajorService;
+import org.jeecg.modules.demo.zbu.service.ITCounselorService;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
@@ -51,6 +55,10 @@ public class TClassController extends JeecgController<TClass, ITClassService> {
 	private ITClassService tClassService;
 	@Autowired
 	private JdbcTemplate jdbcTemplate;
+	@Autowired
+	private ITMajorService tMajorService;
+	@Autowired
+	private ITCounselorService tCounselorService;
 
 	/**
 	 * 分页列表查询
@@ -287,9 +295,23 @@ public class TClassController extends JeecgController<TClass, ITClassService> {
 						continue;
 					}
 
-					// 5.4 辅导员空值校验
+					// 5.4 验证所属专业是否真实存在
+					TMajor major = tMajorService.getById(clazz.getMajorId());
+					if (major == null) {
+						failMsgList.add("第" + totalRow + "行：所属专业ID【" + clazz.getMajorId() + "】不存在（编码：" + classCode + "），跳过导入");
+						continue;
+					}
+
+					// 5.5 辅导员空值校验
 					if (oConvertUtils.isEmpty(clazz.getCounselorId())) {
 						failMsgList.add("第" + totalRow + "行：辅导员为空（编码：" + classCode + "），跳过导入");
+						continue;
+					}
+
+					// 5.6 验证辅导员是否真实存在
+					TCounselor counselor = tCounselorService.getById(clazz.getCounselorId());
+					if (counselor == null) {
+						failMsgList.add("第" + totalRow + "行：辅导员ID【" + clazz.getCounselorId() + "】不存在（编码：" + classCode + "），跳过导入");
 						continue;
 					}
 

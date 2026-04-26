@@ -205,6 +205,7 @@ public class TReceiveController extends JeecgController<TReceive, ITReceiveServi
 	@AutoLog(value = "领取表-编辑")
 	@Operation(summary = "领取表-编辑")
 	@RequestMapping(value = "/edit", method = {RequestMethod.PUT, RequestMethod.POST})
+	@Transactional(rollbackFor = Exception.class)
 	public Result<String> edit(@RequestBody TReceive tReceive) {
 		try {
 			TReceive existingReceive = tReceiveService.getById(tReceive.getId());
@@ -214,19 +215,106 @@ public class TReceiveController extends JeecgController<TReceive, ITReceiveServi
 			String oldStatus = existingReceive.getReceiveStatus();
 			String newStatus = tReceive.getReceiveStatus();
 
+			// 如果改为已领取，设置领取时间
 			if ("1".equals(newStatus)) {
 				tReceive.setReceiveTime(new Date());
 			}
 			tReceiveService.updateById(tReceive);
 
+			// 如果改为未领取，删除对应的账单
 			if ("0".equals(newStatus) && !"0".equals(oldStatus)) {
-				deleteStudentBillForReceive(existingReceive);
+				deleteStudentBillForReceive(tReceive);
+			}
+
+			// 如果从非已领取改为已领取，创建账单记录
+			if ("1".equals(newStatus) && !"1".equals(oldStatus)) {
+				createStudentBillForReceive(tReceive);
 			}
 
 			return Result.OK("编辑成功！");
 		} catch (Exception e) {
 			log.error("编辑领取记录失败", e);
 			throw new RuntimeException("编辑失败：" + e.getMessage());
+		}
+	}
+
+	/**
+	 * 为已领取的记录创建个人账单
+	 */
+	private void createStudentBillForReceive(TReceive receive) {
+		try {
+			String subscriptionId = receive.getSubscriptionId();
+			if (oConvertUtils.isEmpty(subscriptionId)) {
+				log.warn("【创建账单失败】领取记录ID={} 的subscriptionId为空", receive.getId());
+				return;
+			}
+
+			TSubscription subscription = tSubscriptionService.getById(subscriptionId);
+			if (subscription == null) {
+				log.warn("【创建账单失败】征订ID={} 不存在", subscriptionId);
+				return;
+			}
+
+			// 获取学号
+			String studentNo = subscription.getStudentId();
+			TStudent student = tStudentService.getById(studentNo);
+			if (student != null) {
+				studentNo = student.getStudentId();
+			}
+
+			// 获取教材信息
+			TTextbook textbook = tTextbookService.getById(subscription.getTextbookId());
+			String textbookName = textbook != null ? textbook.getTextbookName() : "未知教材";
+
+			// 检查账单是否已存在
+			QueryWrapper<StudentBill> billWrapper = new QueryWrapper<>();
+			billWrapper.eq("student_id", studentNo)
+					.eq("subscription_year", subscription.getSubscriptionYear())
+					.eq("subscription_semester", subscription.getSubscriptionSemester())
+					.eq("textbook_name", textbookName);
+
+			StudentBill existingBill = studentBillService.getOne(billWrapper);
+			if (existingBill != null) {
+				// 账单已存在，更新领取状态为已领取
+				StudentBill billUpdate = new StudentBill();
+				billUpdate.setId(existingBill.getId());
+				billUpdate.setReceiveStatus("已领取");
+				billUpdate.setUpdateTime(new Date());
+				boolean updateSuccess = studentBillService.updateById(billUpdate);
+				if (updateSuccess) {
+					log.info("【更新账单成功】领取记录ID={} → 账单（学号={}，教材={}）状态改为已领取",
+							receive.getId(), studentNo, textbookName);
+				}
+				return;
+			}
+
+			// 创建新账单
+			TMajor major = tMajorService.getById(subscription.getMajorId());
+			BigDecimal price = textbook != null && textbook.getPrice() != null ? textbook.getPrice() : BigDecimal.ZERO;
+			BigDecimal discount = textbook != null && textbook.getDiscount() != null ? textbook.getDiscount() : new BigDecimal("1");
+			BigDecimal discountPrice = price.multiply(discount).setScale(2, java.math.RoundingMode.HALF_UP);
+
+			StudentBill newBill = new StudentBill();
+			newBill.setStudentId(studentNo);
+			newBill.setMajorName(major != null ? major.getMajorName() : "");
+			newBill.setSubscriptionYear(subscription.getSubscriptionYear());
+			newBill.setSubscriptionSemester(subscription.getSubscriptionSemester());
+			newBill.setTextbookName(textbookName);
+			newBill.setPrice(price);
+			newBill.setDiscountPrice(discountPrice);
+			newBill.setSubscribeStatus(subscription.getSubscribeStatus());
+			newBill.setReceiveStatus("已领取");
+			newBill.setRemark("");
+			newBill.setCreateTime(new Date());
+			newBill.setUpdateTime(new Date());
+
+			boolean createSuccess = studentBillService.save(newBill);
+			if (createSuccess) {
+				log.info("【创建账单成功】领取记录ID={} → 账单（学号={}，教材={}）创建成功",
+						receive.getId(), studentNo, textbookName);
+			}
+		} catch (Exception e) {
+			log.error("【创建账单异常】领取记录ID={}", receive.getId(), e);
 		}
 	}
 
@@ -286,7 +374,6 @@ public class TReceiveController extends JeecgController<TReceive, ITReceiveServi
 	@RequiresPermissions("zbu:t_receive:exportXls")
 	@RequestMapping(value = "/exportXls")
 	public ModelAndView exportXls(HttpServletRequest request, TReceive tReceive) {
-		// 1. 初始化导出视图（JeecgBoot原生，无任何报错）
 		ModelAndView mv = new ModelAndView(new JeecgEntityExcelView());
 		ExportParams exportParams = new ExportParams("领取表", "领取表数据");
 		mv.addObject(NormalExcelConstants.PARAMS, exportParams);
@@ -323,17 +410,17 @@ public class TReceiveController extends JeecgController<TReceive, ITReceiveServi
 					}
 				}
 			}
-			// 管理员兜底判断
 			if (!isAdmin && "admin".equals(loginUser.getUsername())) {
 				isAdmin = true;
 			}
 
-			// 3. 按角色查询 领取表视图 v_receive_with_details
+			// 3. 按角色查询（使用MyBatis-Plus代替JdbcTemplate）
+			QueryWrapper<TReceive> queryWrapper = new QueryWrapper<>();
+			queryWrapper.orderByDesc("create_time");
+
 			if (isAdmin) {
-				// 管理员：导出全部视图数据
-				list = jdbcTemplate.query(
-						"SELECT * FROM v_receive_with_details ORDER BY createTime DESC",
-						new BeanPropertyRowMapper<>(TReceive.class));
+				// 管理员：导出全部
+				list = tReceiveService.list(queryWrapper);
 			} else if (isCounselor) {
 				// 辅导员：仅导出自己管理的班级
 				TCounselor counselor = tCounselorService.lambdaQuery()
@@ -347,11 +434,8 @@ public class TReceiveController extends JeecgController<TReceive, ITReceiveServi
 								.in(TStudent::getClassId, classIds).list();
 						if (!studentList.isEmpty()) {
 							List<String> studentIds = studentList.stream().map(TStudent::getId).toList();
-							String ids = String.join("','", studentIds);
-							// 查询视图
-							String sql = "SELECT * FROM v_receive_with_details WHERE receiveOperator IN ('" + ids
-									+ "') ORDER BY createTime DESC";
-							list = jdbcTemplate.query(sql, new BeanPropertyRowMapper<>(TReceive.class));
+							queryWrapper.in("receive_operator", studentIds);
+							list = tReceiveService.list(queryWrapper);
 						}
 					}
 				}
@@ -360,17 +444,14 @@ public class TReceiveController extends JeecgController<TReceive, ITReceiveServi
 				TStudent student = tStudentService.lambdaQuery()
 						.eq(TStudent::getStudentId, loginUser.getUsername()).one();
 				if (student != null) {
-					list = jdbcTemplate.query(
-							"SELECT * FROM v_receive_with_details WHERE receiveOperator = ? ORDER BY createTime DESC",
-							new BeanPropertyRowMapper<>(TReceive.class),
-							student.getId());
+					queryWrapper.eq("receive_operator", student.getId());
+					list = tReceiveService.list(queryWrapper);
 				}
 			}
 		} catch (Exception e) {
 			log.error("领取表导出失败", e);
 		}
 
-		// 视图自带学院信息，无需手动赋值，直接导出
 		mv.addObject(NormalExcelConstants.DATA_LIST, list);
 		return mv;
 	}

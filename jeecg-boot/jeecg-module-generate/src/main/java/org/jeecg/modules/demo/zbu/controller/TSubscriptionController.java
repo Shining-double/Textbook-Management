@@ -306,6 +306,20 @@ public class TSubscriptionController extends JeecgController<TSubscription, ITSu
 			list = jdbcTemplate.query(sql.toString(), new BeanPropertyRowMapper<>(TSubscription.class));
 		}
 
+		// 填充学生姓名
+		for (TSubscription subscription : list) {
+			if (oConvertUtils.isNotEmpty(subscription.getStudentId())) {
+				try {
+					TStudent student = tStudentService.getById(subscription.getStudentId());
+					if (student != null) {
+						subscription.setStudentName(student.getStudentName());
+					}
+				} catch (Exception e) {
+					log.warn("查询学生姓名失败：{}", e.getMessage());
+				}
+			}
+		}
+
 		mv.addObject(NormalExcelConstants.DATA_LIST, list);
 		return mv;
 	}
