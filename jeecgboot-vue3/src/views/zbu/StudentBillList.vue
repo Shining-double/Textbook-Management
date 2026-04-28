@@ -37,14 +37,6 @@
           </template>
         </template>
 
-        <template #action="{ record }" v-if="isAdmin">
-          <TableAction
-            v-if="!record?.isSummary"
-            :actions="getTableAction(record)"
-            :dropDownActions="getDropDownAction(record)"
-          />
-        </template>
-
         <template v-slot:bodyCell="{ column, record, text }">
           <template v-if="column.dataIndex === 'studentNo'">
             {{ record?.isSummary ? '合计' : (record?.studentNo || '未知学号') }}
@@ -284,6 +276,7 @@ const { tableContext, onExportXls, onImportXls } = useListPage({
     api: fetchBillList,
     columns: columns,
     canResize:true,
+    showActionColumn: false,
     formConfig: {
       schemas: unref(isAdmin) ? searchFormSchema : unref(studentSearchSchema),
       autoSubmitOnEnter: true,
@@ -291,10 +284,6 @@ const { tableContext, onExportXls, onImportXls } = useListPage({
       fieldMapToNumber: [],
       fieldMapToTime: [],
       show: unref(isAdmin) || unref(isStudent),
-    },
-    actionColumn: {
-      width: 120,
-      fixed:'right',
     },
     beforeFetch: (params) => {
       if (params && fieldPickers) {

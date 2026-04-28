@@ -452,6 +452,35 @@ public class TReceiveController extends JeecgController<TReceive, ITReceiveServi
 			log.error("领取表导出失败", e);
 		}
 
+		// 填充学生姓名和教材名称
+		for (TReceive receive : list) {
+			// 填充学生姓名
+			if (oConvertUtils.isNotEmpty(receive.getReceiveOperator())) {
+				try {
+					TStudent student = tStudentService.getById(receive.getReceiveOperator());
+					if (student != null) {
+						receive.setStudentName(student.getStudentName());
+					}
+				} catch (Exception e) {
+					log.warn("查询学生姓名失败：{}", e.getMessage());
+				}
+			}
+			// 填充教材名称
+			if (oConvertUtils.isNotEmpty(receive.getSubscriptionId())) {
+				try {
+					TSubscription subscription = tSubscriptionService.getById(receive.getSubscriptionId());
+					if (subscription != null) {
+						TTextbook textbook = tTextbookService.getById(subscription.getTextbookId());
+						if (textbook != null) {
+							receive.setTextbookName(textbook.getTextbookName());
+						}
+					}
+				} catch (Exception e) {
+					log.warn("查询教材名称失败：{}", e.getMessage());
+				}
+			}
+		}
+
 		mv.addObject(NormalExcelConstants.DATA_LIST, list);
 		return mv;
 	}
