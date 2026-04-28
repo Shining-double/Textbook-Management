@@ -568,6 +568,7 @@ public class StudentBillController extends JeecgController<StudentBill, IStudent
 			Map<String, Object> recordMap = new HashMap<>();
 			recordMap.put("id", bill.getId());
 			recordMap.put("studentId", bill.getStudentId());
+			recordMap.put("studentNo", bill.getStudentId());
 			recordMap.put("className", bill.getClassName());
 			recordMap.put("majorName", bill.getMajorName());
 			recordMap.put("subscriptionYear", bill.getSubscriptionYear());
@@ -580,6 +581,23 @@ public class StudentBillController extends JeecgController<StudentBill, IStudent
 			recordMap.put("remark", bill.getRemark());
 			recordMap.put("createTime", bill.getCreateTime());
 			recordMap.put("updateTime", bill.getUpdateTime());
+
+			// 填充学生姓名
+			String studentId = bill.getStudentId();
+			String studentName = "未知姓名";
+			if (oConvertUtils.isNotEmpty(studentId)) {
+				try {
+					TStudent student = tStudentService.lambdaQuery()
+							.eq(TStudent::getStudentId, studentId)
+							.one();
+					if (student != null) {
+						studentName = student.getStudentName();
+					}
+				} catch (Exception e) {
+					log.warn("查询学生姓名失败：{}", e.getMessage());
+				}
+			}
+			recordMap.put("studentName", studentName);
 
 			String textbookName = bill.getTextbookName();
 			String isbn = "";

@@ -81,8 +81,7 @@ import StudentBillModal from './components/StudentBillModal.vue'
 import {columns, searchFormSchema, superQuerySchema} from './StudentBill.data';
 import {
   list, deleteOne, batchDelete, getImportUrl, getExportUrl,
-  syncFromSubscription, getStudentByNo, getStudentById,
-  getMajorInfo, getTextbookById
+  syncFromSubscription
 } from './StudentBill.api';
 import { useUserStore } from '/@/store/modules/user';
 import { useMessage } from '/@/hooks/web/useMessage';
@@ -163,65 +162,32 @@ const fetchBillList = async (params = {}) => {
     const formattedRecords: Recordable[] = [];
 
     for (const item of rawRecords) {
-      try {
-        let studentNo = item.studentNo || item.student_id || item.studentId || "未知学号";
-        let studentName = item.studentName || "未知姓名";
-        let majorName = item.majorName || "未知专业";
-        let textbookName = item.textbookName || "未知教材";
+      const studentNo = item.studentNo || item.student_id || item.studentId || "未知学号";
+      const studentName = item.studentName || "未知姓名";
+      const majorName = item.majorName || "未知专业";
+      const textbookName = item.textbookName || "未知教材";
 
-        if (studentNo && studentNo !== "未知学号") {
-          try {
-            const studentInfo = await getStudentByNo(studentNo);
-            studentName = studentInfo?.studentName || studentInfo?.name || studentName;
-            studentNo = studentInfo?.studentId || studentInfo?.student_no || studentNo;
-          } catch (e) {
-            console.warn(`【学生查询失败】学号：${studentNo}`, e);
-          }
-        }
-
-        if (!majorName && item.majorId) {
-          try {
-            const majorInfo = await getMajorInfo(item.majorId);
-            majorName = majorInfo?.majorName || majorInfo?.name || majorName;
-          } catch (e) {
-            console.warn(`【专业查询失败】ID：${item.majorId}`, e);
-          }
-        }
-
-        if (!textbookName && item.textbookId) {
-          try {
-            const textbookInfo = await getTextbookById(item.textbookId);
-            textbookName = textbookInfo?.textbookName || textbookInfo?.name || textbookName;
-          } catch (e) {
-            console.warn(`【教材查询失败】ID：${item.textbookId}`, e);
-          }
-        }
-
-        formattedRecords.push({
-          ...item,
-          id: item.id || `bill-${Math.random().toString(36).slice(2, 10)}`,
-          studentId: item.student_id || item.studentId,
-          subscriptionId: item.subscription_id || item.subscriptionId,
-          textbookId: item.textbook_id || item.textbookId,
-          majorId: item.major_id || item.majorId,
-          receiveId: item.receive_id || item.receiveId,
-          studentNo,
-          studentName,
-          majorName,
-          textbookName,
-          isbn: item.isbn || '',
-          subscriptionYear: item.subscriptionYear || item.subscription_year,
-          subscriptionSemester: item.subscriptionSemester || item.subscription_semester,
-          subscribeStatus: item.subscribeStatus || item.subscribe_status,
-          receiveStatus: item.receiveStatus || item.receive_status,
-          price: item.price,
-          discountPrice: item.discountPrice,
-          remark: item.remark,
-        });
-      } catch (e) {
-        console.warn(`【处理账单失败】`, e);
-        formattedRecords.push(item);
-      }
+      formattedRecords.push({
+        ...item,
+        id: item.id || `bill-${Math.random().toString(36).slice(2, 10)}`,
+        studentId: item.student_id || item.studentId,
+        subscriptionId: item.subscription_id || item.subscriptionId,
+        textbookId: item.textbook_id || item.textbookId,
+        majorId: item.major_id || item.majorId,
+        receiveId: item.receive_id || item.receiveId,
+        studentNo,
+        studentName,
+        majorName,
+        textbookName,
+        isbn: item.isbn || '',
+        subscriptionYear: item.subscriptionYear || item.subscription_year,
+        subscriptionSemester: item.subscriptionSemester || item.subscription_semester,
+        subscribeStatus: item.subscribeStatus || item.subscribe_status,
+        receiveStatus: item.receiveStatus || item.receive_status,
+        price: item.price,
+        discountPrice: item.discountPrice,
+        remark: item.remark,
+      });
     }
 
     let finalRecords = [...formattedRecords];
