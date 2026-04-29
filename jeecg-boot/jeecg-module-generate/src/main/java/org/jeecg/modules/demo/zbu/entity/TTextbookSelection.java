@@ -39,10 +39,13 @@ public class TTextbookSelection implements Serializable {
 	@Schema(description = "主键")
 	private java.lang.String id;
 	/** 专业 */
-	@Excel(name = "专业", width = 15, dictTable = "t_major", dicCode = "id", dicText = "major_name")
-	@Dict(dictTable = "t_major", dicCode = "id", dicText = "major_name")
+	@Excel(name = "专业", width = 15)
 	@Schema(description = "专业")
 	private java.lang.String majorId;
+	/** 原始专业输入（用于导入时存储原始文本，如 "24汉本1、2、3、4班；22土木"） */
+	@TableField(exist = false)
+	@Schema(description = "原始专业输入")
+	private java.lang.String rawMajorInput;
 	/** 专业名称（用于搜索，不映射数据库） */
 	@TableField(exist = false)
 	@Schema(description = "专业名称")
@@ -61,7 +64,7 @@ public class TTextbookSelection implements Serializable {
 	@Dict(dictTable = "t_textbook", dicCode = "id", dicText = "textbook_name")
 	@Schema(description = "教材")
 	private java.lang.String textbookId;
-	/** 教材名称（用于搜索，不映射数据库）*/
+	/** 教材名称（用于搜索，不映射数据库） */
 	@TableField(exist = false)
 	@Schema(description = "教材名称")
 	private java.lang.String textbookName;

@@ -69,20 +69,22 @@ export const columns: BasicColumn[] = [
     title: '征订状态',
     align: "center",
     sorter: true,
-    dataIndex: 'subscribeStatus', // 关键：删掉_dictText，后端返回的是subscribeStatus
-    // 新增：把数字1转成中文（可选，优化显示）
+    dataIndex: 'subscribeStatus',
     customRender: ({ text }) => {
-      return text === '1' ? '已征订' : text;
+      if (text === '1') return '已征订';
+      if (text === '2') return '未征订';
+      return text || '未征订';
     }
   },
   {
     title: '领取状态',
     align: "center",
     sorter: true,
-    dataIndex: 'receiveStatus', // 关键：删掉_dictText，后端返回的是receiveStatus
-    // 新增：把数字1转成中文（可选，优化显示）
+    dataIndex: 'receiveStatus',
     customRender: ({ text }) => {
-      return text === '1' ? '已领取' : text;
+      if (text === '1') return '已领取';
+      if (text === '0') return '未领取';
+      return text || '未领取';
     }
   },
   {

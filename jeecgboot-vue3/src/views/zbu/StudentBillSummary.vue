@@ -97,7 +97,7 @@ const {prefix, tableContext, onExportXls} = useListPage({
         ...params,
         studentNo: params.studentNo || '',
         studentName: params.studentName || '',
-        className: params.className || '',
+        collegeName: params.collegeName || '',
         majorName: params.majorName || '',
         schoolYear: params.schoolYear || '',
         semester: params.semester || '',

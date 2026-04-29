@@ -40,13 +40,14 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import io.swagger.v3.oas.annotations.Operation;
 import org.jeecg.common.aspect.annotation.AutoLog;
 import org.apache.shiro.authz.annotation.RequiresPermissions;
+
 /**
  * @Description: 班级表
  * @Author: jeecg-boot
- * @Date:   2026-01-26
+ * @Date: 2026-01-26
  * @Version: V1.0
  */
-@Tag(name="班级表")
+@Tag(name = "班级表")
 @RestController
 @RequestMapping("/zbu/tClass")
 @Slf4j
@@ -69,12 +70,12 @@ public class TClassController extends JeecgController<TClass, ITClassService> {
 	 * @param req
 	 * @return
 	 */
-	//@AutoLog(value = "班级表-分页列表查询")
-	@Operation(summary="班级表-分页列表查询")
+	// @AutoLog(value = "班级表-分页列表查询")
+	@Operation(summary = "班级表-分页列表查询")
 	@GetMapping(value = "/list")
 	public Result<IPage<TClass>> queryPageList(TClass tClass,
-											   @RequestParam(name="pageNo", defaultValue="1") Integer pageNo,
-											   @RequestParam(name="pageSize", defaultValue="10") Integer pageSize,
+											   @RequestParam(name = "pageNo", defaultValue = "1") Integer pageNo,
+											   @RequestParam(name = "pageSize", defaultValue = "10") Integer pageSize,
 											   HttpServletRequest req) {
 
 		// 处理搜索参数
@@ -110,7 +111,8 @@ public class TClassController extends JeecgController<TClass, ITClassService> {
 			if (record.getCounselorId() != null && !record.getCounselorId().isEmpty()) {
 				try {
 					String counselorNoSql = "SELECT counselor_id FROM t_counselor WHERE id = ? LIMIT 1";
-					String counselorNoResult = jdbcTemplate.queryForObject(counselorNoSql, String.class, record.getCounselorId());
+					String counselorNoResult = jdbcTemplate.queryForObject(counselorNoSql, String.class,
+							record.getCounselorId());
 					record.setCounselorNo(counselorNoResult);
 				} catch (Exception e) {
 					log.warn("查询辅导员工号失败：{}", e.getMessage());
@@ -122,13 +124,13 @@ public class TClassController extends JeecgController<TClass, ITClassService> {
 	}
 
 	/**
-	 *   添加
+	 * 添加
 	 *
 	 * @param tClass
 	 * @return
 	 */
 	@AutoLog(value = "班级表-添加")
-	@Operation(summary="班级表-添加")
+	@Operation(summary = "班级表-添加")
 	@RequiresPermissions("zbu:t_class:add")
 	@PostMapping(value = "/add")
 	public Result<String> add(@RequestBody TClass tClass) {
@@ -153,47 +155,104 @@ public class TClassController extends JeecgController<TClass, ITClassService> {
 	}
 
 	/**
-	 *  编辑
+	 * 编辑
 	 *
 	 * @param tClass
 	 * @return
 	 */
 	@AutoLog(value = "班级表-编辑")
-	@Operation(summary="班级表-编辑")
+	@Operation(summary = "班级表-编辑")
 	@RequiresPermissions("zbu:t_class:edit")
-	@RequestMapping(value = "/edit", method = {RequestMethod.PUT,RequestMethod.POST})
+	@RequestMapping(value = "/edit", method = { RequestMethod.PUT, RequestMethod.POST })
 	public Result<String> edit(@RequestBody TClass tClass) {
 		tClassService.updateById(tClass);
 		return Result.OK("编辑成功!");
 	}
 
 	/**
-	 *   通过id删除
+	 * 通过id删除
 	 *
 	 * @param id
 	 * @return
 	 */
 	@AutoLog(value = "班级表-通过id删除")
-	@Operation(summary="班级表-通过id删除")
+	@Operation(summary = "班级表-通过id删除")
 	@RequiresPermissions("zbu:t_class:delete")
 	@DeleteMapping(value = "/delete")
-	public Result<String> delete(@RequestParam(name="id",required=true) String id) {
+	public Result<String> delete(@RequestParam(name = "id", required = true) String id) {
 		tClassService.removeById(id);
 		return Result.OK("删除成功!");
 	}
 
 	/**
-	 *  批量删除
+	 * 批量删除
 	 *
 	 * @param ids
 	 * @return
 	 */
 	@AutoLog(value = "班级表-批量删除")
-	@Operation(summary="班级表-批量删除")
+	@Operation(summary = "班级表-批量删除")
 	@RequiresPermissions("zbu:t_class:deleteBatch")
 	@DeleteMapping(value = "/deleteBatch")
-	public Result<String> deleteBatch(@RequestParam(name="ids",required=true) String ids) {
+	public Result<String> deleteBatch(@RequestParam(name = "ids", required = true) String ids) {
 		this.tClassService.removeByIds(Arrays.asList(ids.split(",")));
+		return Result.OK("批量删除成功!");
+	}
+
+	/**
+	 * 班级表批量删除（POST请求，支持大数据量）
+	 *
+	 * @param requestBody 请求体，格式为 {"ids":["id1","id2",...]} 或 "id1,id2,id3"
+	 * @return
+	 */
+	@AutoLog(value = "班级表-批量删除")
+	@Operation(summary = "班级表-批量删除")
+	@RequiresPermissions("zbu:t_class:deleteBatch")
+	@PostMapping(value = "/deleteBatch")
+	public Result<String> deleteBatchPost(@RequestBody String requestBody) {
+		if (oConvertUtils.isEmpty(requestBody)) {
+			return Result.error("删除参数不能为空");
+		}
+
+		List<String> idList = new ArrayList<>();
+
+		// 尝试解析 JSON 数组格式 {"ids":["id1","id2",...]}
+		if (requestBody.contains("[")) {
+			try {
+				// 提取 ids 数组
+				int startIdx = requestBody.indexOf("[");
+				int endIdx = requestBody.indexOf("]");
+				if (startIdx >= 0 && endIdx > startIdx) {
+					String idsArray = requestBody.substring(startIdx + 1, endIdx);
+					// 去掉引号和空格，分割成列表
+					String[] ids = idsArray.replace("\"", "").replace(" ", "").split(",");
+					for (String id : ids) {
+						if (oConvertUtils.isNotEmpty(id)) {
+							idList.add(id);
+						}
+					}
+				}
+			} catch (Exception e) {
+				log.warn("解析JSON格式失败，尝试按逗号分割：{}", requestBody);
+			}
+		}
+
+		// 如果不是 JSON 格式，按逗号分割
+		if (idList.isEmpty()) {
+			String[] ids = requestBody.replace("\"", "").replace(" ", "").split(",");
+			for (String id : ids) {
+				if (oConvertUtils.isNotEmpty(id)) {
+					idList.add(id);
+				}
+			}
+		}
+
+		if (idList.isEmpty()) {
+			return Result.error("删除参数不能为空");
+		}
+
+		log.info("班级表批量删除，IDs数量：{}", idList.size());
+		this.tClassService.removeByIds(idList);
 		return Result.OK("批量删除成功!");
 	}
 
@@ -203,12 +262,12 @@ public class TClassController extends JeecgController<TClass, ITClassService> {
 	 * @param id
 	 * @return
 	 */
-	//@AutoLog(value = "班级表-通过id查询")
-	@Operation(summary="班级表-通过id查询")
+	// @AutoLog(value = "班级表-通过id查询")
+	@Operation(summary = "班级表-通过id查询")
 	@GetMapping(value = "/queryById")
-	public Result<TClass> queryById(@RequestParam(name="id",required=true) String id) {
+	public Result<TClass> queryById(@RequestParam(name = "id", required = true) String id) {
 		TClass tClass = tClassService.getById(id);
-		if(tClass==null) {
+		if (tClass == null) {
 			return Result.error("未找到对应数据");
 		}
 		return Result.OK(tClass);
@@ -255,23 +314,30 @@ public class TClassController extends JeecgController<TClass, ITClassService> {
 			List<String> failMsgList = new ArrayList<>();
 			int totalRow = 0;
 
-			// 3. 遍历解析Excel文件
-			for (Map.Entry<String, MultipartFile> entry : fileMap.entrySet()) {
-				MultipartFile file = entry.getValue();
-				if (file.isEmpty()) {
-					continue;
-				}
+			// 用于检测Excel内部的重复（按编码和名称）
+			java.util.Set<String> classCodesInFile = new java.util.HashSet<>();
+			java.util.Set<String> classNamesInFile = new java.util.HashSet<>();
 
+			// 3. 只处理第一个上传的文件（避免重复处理）
+			MultipartFile file = fileMap.values().iterator().next();
+			if (!file.isEmpty()) {
 				// 4. 解析Excel为班级列表
 				List<TClass> tempList = ExcelImportUtil.importExcel(
 						file.getInputStream(),
 						TClass.class,
 						importParams);
 
+				log.info("班级导入：Excel解析到 {} 条数据", tempList.size());
+
+				// 打印导入前数据库中的班级总数
+				long totalCountBefore = tClassService.count();
+				log.info("班级导入：导入前数据库中有 {} 条记录", totalCountBefore);
+
 				// 5. 逐行校验+过滤
 				for (int i = 0; i < tempList.size(); i++) {
 					totalRow = i + 2; // Excel行号（标题+表头后从第2行开始）
 					TClass clazz = tempList.get(i);
+					log.debug("第{}行：班级编码={}，班级名称={}", totalRow, clazz.getClassCode(), clazz.getClassName());
 
 					// 5.1 班级编码空值校验
 					String classCode = clazz.getClassCode();
@@ -298,7 +364,8 @@ public class TClassController extends JeecgController<TClass, ITClassService> {
 					// 5.4 验证所属专业是否真实存在
 					TMajor major = tMajorService.getById(clazz.getMajorId());
 					if (major == null) {
-						failMsgList.add("第" + totalRow + "行：所属专业ID【" + clazz.getMajorId() + "】不存在（编码：" + classCode + "），跳过导入");
+						failMsgList.add(
+								"第" + totalRow + "行：所属专业ID【" + clazz.getMajorId() + "】不存在（编码：" + classCode + "），跳过导入");
 						continue;
 					}
 
@@ -311,11 +378,26 @@ public class TClassController extends JeecgController<TClass, ITClassService> {
 					// 5.6 验证辅导员是否真实存在
 					TCounselor counselor = tCounselorService.getById(clazz.getCounselorId());
 					if (counselor == null) {
-						failMsgList.add("第" + totalRow + "行：辅导员ID【" + clazz.getCounselorId() + "】不存在（编码：" + classCode + "），跳过导入");
+						failMsgList.add("第" + totalRow + "行：辅导员ID【" + clazz.getCounselorId() + "】不存在（编码：" + classCode
+								+ "），跳过导入");
 						continue;
 					}
 
-					// 6. 检查班级编码是否已存在
+					// 5.7 检查Excel内部是否有重复的班级编码
+					if (classCodesInFile.contains(classCode)) {
+						failMsgList.add("第" + totalRow + "行：班级编码【" + classCode + "】在Excel中重复，跳过导入");
+						continue;
+					}
+					classCodesInFile.add(classCode);
+
+					// 5.8 检查Excel内部是否有重复的班级名称
+					if (classNamesInFile.contains(className)) {
+						failMsgList.add("第" + totalRow + "行：班级名称【" + className + "】在Excel中重复，跳过导入");
+						continue;
+					}
+					classNamesInFile.add(className);
+
+					// 6. 检查班级编码是否已存在（数据库中）
 					QueryWrapper<TClass> codeWrapper = new QueryWrapper<>();
 					codeWrapper.eq("class_code", clazz.getClassCode());
 					if (tClassService.count(codeWrapper) > 0) {
@@ -323,7 +405,7 @@ public class TClassController extends JeecgController<TClass, ITClassService> {
 						continue;
 					}
 
-					// 7. 检查班级名称是否已存在
+					// 7. 检查班级名称是否已存在（数据库中）
 					QueryWrapper<TClass> nameWrapper = new QueryWrapper<>();
 					nameWrapper.eq("class_name", clazz.getClassName());
 					if (tClassService.count(nameWrapper) > 0) {
@@ -340,6 +422,10 @@ public class TClassController extends JeecgController<TClass, ITClassService> {
 			// 9. 批量保存有效数据
 			if (!validClassList.isEmpty()) {
 				tClassService.saveBatch(validClassList);
+
+				// 打印导入后的总数
+				long totalCountAfter = tClassService.count();
+				log.info("班级导入：导入后数据库中有 {} 条记录（新增 {} 条）", totalCountAfter, validClassList.size());
 			}
 
 			// 10. 构建返回结果

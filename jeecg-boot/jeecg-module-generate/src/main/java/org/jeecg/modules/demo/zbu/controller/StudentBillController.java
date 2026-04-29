@@ -238,9 +238,9 @@ public class StudentBillController extends JeecgController<StudentBill, IStudent
 	 * 账单汇总查询
 	 *
 	 * @param schoolYear 学年（可选）
-	 * @param semester 学期（可选）
-	 * @param pageNo 页码
-	 * @param pageSize 每页数量
+	 * @param semester   学期（可选）
+	 * @param pageNo     页码
+	 * @param pageSize   每页数量
 	 * @return 汇总列表
 	 */
 	@Operation(summary = "个人账单-汇总查询")
@@ -248,7 +248,7 @@ public class StudentBillController extends JeecgController<StudentBill, IStudent
 	public Result<?> querySummaryList(
 			@RequestParam(name = "studentNo", required = false) String studentNo,
 			@RequestParam(name = "studentName", required = false) String studentName,
-			@RequestParam(name = "className", required = false) String className,
+			@RequestParam(name = "collegeName", required = false) String collegeName,
 			@RequestParam(name = "majorName", required = false) String majorName,
 			@RequestParam(name = "schoolYear", required = false) String schoolYear,
 			@RequestParam(name = "semester", required = false) String semester,
@@ -287,9 +287,9 @@ public class StudentBillController extends JeecgController<StudentBill, IStudent
 			baseSql += " AND studentName LIKE '%" + studentName + "%'";
 			countSql += " AND studentName LIKE '%" + studentName + "%'";
 		}
-		if (oConvertUtils.isNotEmpty(className)) {
-			baseSql += " AND className LIKE '%" + className + "%'";
-			countSql += " AND className LIKE '%" + className + "%'";
+		if (oConvertUtils.isNotEmpty(collegeName)) {
+			baseSql += " AND collegeName LIKE '%" + collegeName + "%'";
+			countSql += " AND collegeName LIKE '%" + collegeName + "%'";
 		}
 		if (oConvertUtils.isNotEmpty(majorName)) {
 			baseSql += " AND majorName LIKE '%" + majorName + "%'";
@@ -360,7 +360,7 @@ public class StudentBillController extends JeecgController<StudentBill, IStudent
 			HttpServletRequest request,
 			@RequestParam(name = "studentNo", required = false) String studentNo,
 			@RequestParam(name = "studentName", required = false) String studentName,
-			@RequestParam(name = "className", required = false) String className,
+			@RequestParam(name = "collegeName", required = false) String collegeName,
 			@RequestParam(name = "majorName", required = false) String majorName,
 			@RequestParam(name = "schoolYear", required = false) String schoolYear,
 			@RequestParam(name = "semester", required = false) String semester) {
@@ -397,8 +397,8 @@ public class StudentBillController extends JeecgController<StudentBill, IStudent
 		if (oConvertUtils.isNotEmpty(studentName)) {
 			baseSql += " AND studentName LIKE '%" + studentName + "%'";
 		}
-		if (oConvertUtils.isNotEmpty(className)) {
-			baseSql += " AND className LIKE '%" + className + "%'";
+		if (oConvertUtils.isNotEmpty(collegeName)) {
+			baseSql += " AND collegeName LIKE '%" + collegeName + "%'";
 		}
 		if (oConvertUtils.isNotEmpty(majorName)) {
 			baseSql += " AND majorName LIKE '%" + majorName + "%'";
@@ -423,19 +423,28 @@ public class StudentBillController extends JeecgController<StudentBill, IStudent
 			StudentBillSummary summary = new StudentBillSummary();
 
 			Object studentNoObj = record.get("studentNo");
-			if (studentNoObj != null) summary.setStudentNo(studentNoObj.toString());
+			if (studentNoObj != null)
+				summary.setStudentNo(studentNoObj.toString());
 
 			Object studentNameObj = record.get("studentName");
-			if (studentNameObj != null) summary.setStudentName(studentNameObj.toString());
+			if (studentNameObj != null)
+				summary.setStudentName(studentNameObj.toString());
 
 			Object classNameObj = record.get("className");
-			if (classNameObj != null) summary.setClassName(classNameObj.toString());
+			if (classNameObj != null)
+				summary.setClassName(classNameObj.toString());
+
+			Object collegeNameObj = record.get("collegeName");
+			if (collegeNameObj != null)
+				summary.setCollegeName(collegeNameObj.toString());
 
 			Object majorNameObj = record.get("majorName");
-			if (majorNameObj != null) summary.setMajorName(majorNameObj.toString());
+			if (majorNameObj != null)
+				summary.setMajorName(majorNameObj.toString());
 
 			Object schoolYearObj = record.get("schoolYear");
-			if (schoolYearObj != null) summary.setSchoolYear(schoolYearObj.toString());
+			if (schoolYearObj != null)
+				summary.setSchoolYear(schoolYearObj.toString());
 
 			Object semesterObj = record.get("semester");
 			if (semesterObj != null) {
@@ -540,7 +549,8 @@ public class StudentBillController extends JeecgController<StudentBill, IStudent
 		// 如果有班级名称搜索条件，添加子查询
 		if (className != null && !className.isEmpty()) {
 			queryWrapper.inSql("student_id",
-					"SELECT student_id FROM t_student WHERE class_id IN (SELECT id FROM t_class WHERE class_name LIKE '%" + className + "%')");
+					"SELECT student_id FROM t_student WHERE class_id IN (SELECT id FROM t_class WHERE class_name LIKE '%"
+							+ className + "%')");
 		}
 
 		// 1. 获取当前登录用户
@@ -698,7 +708,69 @@ public class StudentBillController extends JeecgController<StudentBill, IStudent
 	@RequiresPermissions("zbu:student_bill:deleteBatch")
 	@DeleteMapping(value = "/deleteBatch")
 	public Result<String> deleteBatch(@RequestParam(name = "ids", required = true) String ids) {
-		this.studentBillService.removeByIds(Arrays.asList(ids.split(",")));
+		if (oConvertUtils.isEmpty(ids)) {
+			return Result.error("删除参数不能为空");
+		}
+		log.info("账单汇总批量删除，IDs数量：{}", ids.split(",").length);
+		List<String> idList = Arrays.asList(ids.split(","));
+		this.studentBillService.removeByIds(idList);
+		return Result.OK("批量删除成功!");
+	}
+
+	/**
+	 * 账单汇总批量删除（POST请求，支持大数据量）
+	 *
+	 * @param requestBody 请求体，格式为 {"ids":["id1","id2",...]} 或 "id1,id2,id3"
+	 * @return
+	 */
+	@AutoLog(value = "账单汇总-批量删除")
+	@Operation(summary = "账单汇总-批量删除")
+	@RequiresPermissions("zbu:student_bill:deleteBatch")
+	@PostMapping(value = "/deleteSummaryBatch")
+	public Result<String> deleteSummaryBatch(@RequestBody String requestBody) {
+		if (oConvertUtils.isEmpty(requestBody)) {
+			return Result.error("删除参数不能为空");
+		}
+
+		List<String> idList = new ArrayList<>();
+
+		// 尝试解析 JSON 数组格式 {"ids":["id1","id2",...]}
+		if (requestBody.contains("[")) {
+			try {
+				// 提取 ids 数组
+				int startIdx = requestBody.indexOf("[");
+				int endIdx = requestBody.indexOf("]");
+				if (startIdx >= 0 && endIdx > startIdx) {
+					String idsArray = requestBody.substring(startIdx + 1, endIdx);
+					// 去掉引号和空格，分割成列表
+					String[] ids = idsArray.replace("\"", "").replace(" ", "").split(",");
+					for (String id : ids) {
+						if (oConvertUtils.isNotEmpty(id)) {
+							idList.add(id);
+						}
+					}
+				}
+			} catch (Exception e) {
+				log.warn("解析JSON格式失败，尝试按逗号分割：{}", requestBody);
+			}
+		}
+
+		// 如果不是 JSON 格式，按逗号分割
+		if (idList.isEmpty()) {
+			String[] ids = requestBody.replace("\"", "").replace(" ", "").split(",");
+			for (String id : ids) {
+				if (oConvertUtils.isNotEmpty(id)) {
+					idList.add(id);
+				}
+			}
+		}
+
+		if (idList.isEmpty()) {
+			return Result.error("删除参数不能为空");
+		}
+
+		log.info("账单汇总批量删除，IDs数量：{}", idList.size());
+		this.studentBillService.removeByIds(idList);
 		return Result.OK("批量删除成功!");
 	}
 
@@ -734,7 +806,8 @@ public class StudentBillController extends JeecgController<StudentBill, IStudent
 		mv.addObject(NormalExcelConstants.CLASS, StudentBill.class);
 
 		// 1. 获取原始数据
-		QueryWrapper<StudentBill> queryWrapper = QueryGenerator.initQueryWrapper(studentBill, request.getParameterMap());
+		QueryWrapper<StudentBill> queryWrapper = QueryGenerator.initQueryWrapper(studentBill,
+				request.getParameterMap());
 
 		// 2. 判断是否是管理员
 		LoginUser loginUser = (LoginUser) SecurityUtils.getSubject().getPrincipal();

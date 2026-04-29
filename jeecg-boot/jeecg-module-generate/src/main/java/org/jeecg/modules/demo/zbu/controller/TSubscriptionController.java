@@ -179,6 +179,33 @@ public class TSubscriptionController extends JeecgController<TSubscription, ITSu
 				return Result.error("更新失败");
 			}
 
+			// 同步更新个人账单中的征订状态
+			TStudent student = tStudentService.getById(oldSubscription.getStudentId());
+			String studentNo = student != null ? student.getStudentId() : null;
+
+			TTextbook textbook = tTextbookService.getById(oldSubscription.getTextbookId());
+			String textbookName = textbook != null ? textbook.getTextbookName() : null;
+
+			if (studentNo != null && textbookName != null) {
+				// 根据学号、学年、学期、教材名称查询个人账单
+				QueryWrapper<StudentBill> billWrapper = new QueryWrapper<>();
+				billWrapper.eq("student_id", studentNo)
+						.eq("subscription_year", oldSubscription.getSubscriptionYear())
+						.eq("subscription_semester", oldSubscription.getSubscriptionSemester())
+						.eq("textbook_name", textbookName);
+
+				StudentBill existingBill = studentBillService.getOne(billWrapper);
+				if (existingBill != null) {
+					// 更新个人账单的征订状态
+					StudentBill billUpdate = new StudentBill();
+					billUpdate.setId(existingBill.getId());
+					billUpdate.setSubscribeStatus(newStatus);
+					billUpdate.setUpdateTime(new Date());
+					studentBillService.updateById(billUpdate);
+					log.info("编辑征订记录时同步更新个人账单征订状态，账单ID={}，新状态={}", existingBill.getId(), newStatus);
+				}
+			}
+
 			// 当征订状态从非"已征订"改为"已征订"时，生成领取记录
 			if (!"1".equals(oldStatus) && "1".equals(newStatus)) {
 				QueryWrapper<TReceive> receiveWrapper = new QueryWrapper<>();
@@ -200,11 +227,11 @@ public class TSubscriptionController extends JeecgController<TSubscription, ITSu
 					}
 					tReceiveService.save(receive);
 					log.info("编辑征订状态为已征订，创建领取记录成功，征订ID：{}", subscriptionId);
-					return Result.OK("编辑成功！并已创建领取记录");
+					return Result.OK("编辑成功！并已创建领取记录，同步更新个人账单");
 				}
 			}
 
-			return Result.OK("编辑成功!");
+			return Result.OK("编辑成功！已同步更新个人账单");
 		} catch (Exception e) {
 			log.error("编辑征订记录失败", e);
 			return Result.error("编辑失败：" + e.getMessage());
@@ -634,7 +661,41 @@ public class TSubscriptionController extends JeecgController<TSubscription, ITSu
 				}
 			}
 
-			// 8. 返回最终结果（不在此处创建账单，等学生领取教材后再生成账单）
+			// 8. 同步更新个人账单表中的征订状态
+			for (TSubscription subscription : subList) {
+				// 查询该征订记录对应的个人账单
+				TStudent student = tStudentService.getById(subscription.getStudentId());
+				String studentNo = student != null ? student.getStudentId() : null;
+				if (studentNo == null) {
+					continue;
+				}
+
+				TTextbook textbook = tTextbookService.getById(subscription.getTextbookId());
+				String textbookName = textbook != null ? textbook.getTextbookName() : null;
+				if (textbookName == null) {
+					continue;
+				}
+
+				// 根据学号、学年、学期、教材名称查询个人账单
+				QueryWrapper<StudentBill> billWrapper = new QueryWrapper<>();
+				billWrapper.eq("student_id", studentNo)
+						.eq("subscription_year", subscription.getSubscriptionYear())
+						.eq("subscription_semester", subscription.getSubscriptionSemester())
+						.eq("textbook_name", textbookName);
+
+				StudentBill existingBill = studentBillService.getOne(billWrapper);
+				if (existingBill != null) {
+					// 更新个人账单的征订状态
+					StudentBill billUpdate = new StudentBill();
+					billUpdate.setId(existingBill.getId());
+					billUpdate.setSubscribeStatus(subscribeStatus);
+					billUpdate.setUpdateTime(new Date());
+					studentBillService.updateById(billUpdate);
+					log.info("同步更新个人账单征订状态，账单ID={}，新状态={}", existingBill.getId(), subscribeStatus);
+				}
+			}
+
+			// 9. 返回最终结果
 			String msg = String.format("成功修改%d条征订记录状态（创建%d条领取记录）！", ids.size(), receiveCreateCount);
 			return Result.OK(msg);
 
@@ -687,12 +748,12 @@ public class TSubscriptionController extends JeecgController<TSubscription, ITSu
 			TStudent student = tStudentService.getById(subscription.getStudentId());
 			String studentNo = student != null ? student.getStudentId() : "未知学生";
 
-			// 4. 更新征订状态为"已确认"
-			subscription.setSubscribeStatus("已确认");
+			// 4. 更新征订状态为"已征订"(1)
+			subscription.setSubscribeStatus("1");
 			subscription.setSubscribeTime(new Date());
 			subscription.setUpdateTime(new Date());
 			tSubscriptionService.updateById(subscription);
-			log.info("学生{}同意征订，征订记录ID：{}", studentNo, subscriptionId);
+			log.info("学生{}同意征订,征订记录ID:{}", studentNo, subscriptionId);
 
 			// 5. 创建领取记录
 			TReceive receive = new TReceive();

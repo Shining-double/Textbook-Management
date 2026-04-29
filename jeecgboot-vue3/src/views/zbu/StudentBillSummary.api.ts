@@ -1,4 +1,4 @@
-import {defHttp} from '/@/utils/http/axios';
+import { defHttp } from '/@/utils/http/axios';
 import { useMessage } from "/@/hooks/web/useMessage";
 
 const { createConfirm } = useMessage();
@@ -36,7 +36,7 @@ export const batchDelete = (params, handleSuccess) => {
     okText: '确认',
     cancelText: '取消',
     onOk: () => {
-      return defHttp.delete({url: Api.deleteBatch, data: params}, {joinParamsToUrl: true}).then(() => {
+      return defHttp.post({ url: Api.deleteBatch, data: params }).then(() => {
         handleSuccess();
       });
     }

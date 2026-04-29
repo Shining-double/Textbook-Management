@@ -42,6 +42,11 @@ public class StudentBillSummary implements Serializable {
     @Schema(description = "专业")
     private java.lang.String majorName;
 
+    /**学院*/
+    @Excel(name = "学院", width = 15)
+    @Schema(description = "学院")
+    private java.lang.String collegeName;
+
     /**学年*/
     @Excel(name = "学年", width = 15)
     @Schema(description = "学年")

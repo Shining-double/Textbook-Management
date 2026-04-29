@@ -136,8 +136,7 @@ public class TTextbookSelectionController extends JeecgController<TTextbookSelec
 					"majorId", "majorName", "classId", "className",
 					"textbookId", "textbookName", "isbn", "schoolYear",
 					"semester", "selectionStatus", "createTime", "updateTime",
-					"id", "quantity", "price", "totalPrice"
-			));
+					"id", "quantity", "price", "totalPrice"));
 			if (allowedColumns.contains(column)) {
 				// 只允许asc或desc
 				String orderUpper = order.toUpperCase();
@@ -711,9 +710,18 @@ public class TTextbookSelectionController extends JeecgController<TTextbookSelec
 				// 调试日志：打印读取到的总行数
 				log.info("读取到Excel数据总行数：{}", list.size());
 
+				// 打印每行数据的majorId字段内容
+				for (int i = 0; i < list.size(); i++) {
+					TTextbookSelection s = list.get(i);
+					log.info("第{}行 majorId原始值=[{}], textbookId=[{}], schoolYear=[{}]",
+							i + 1, s.getMajorId(), s.getTextbookId(), s.getSchoolYear());
+				}
+
 				// 2. 手动解析文本→ID + 校验必填
 				List<TTextbookSelection> validList = new ArrayList<>();
 				List<String> errorMsgList = new ArrayList<>();
+				// 存储原始的专业/班级输入内容，使用行索引作为key（因为修改selection字段会改变hashCode导致Map找不到）
+				Map<Integer, String> rawMajorInputMap = new HashMap<>();
 
 				for (int i = 0; i < list.size(); i++) {
 					TTextbookSelection selection = list.get(i);
@@ -721,77 +729,17 @@ public class TTextbookSelectionController extends JeecgController<TTextbookSelec
 					int rowNum = i + 4;
 					boolean isValid = true;
 
-					// ===== 专业解析（兼容ID/名称） =====
+					// ===== 专业解析（支持分号分隔的多个专业/班级） =====
 					String majorContent = selection.getMajorId();
+					log.info("第{}行 处理专业字段,原始值=[{}], isEmpty={}", rowNum, majorContent,
+							oConvertUtils.isEmpty(majorContent));
 					if (oConvertUtils.isEmpty(majorContent)) {
 						errorMsgList.add("第" + rowNum + "行：专业不能为空");
 						isValid = false;
 					} else {
-						if (majorContent.matches("^\\d{16,}$")) {
-							// 是ID，验证是否存在
-							selection.setMajorId(majorContent.trim());
-							QueryWrapper<TMajor> majorIdWrapper = new QueryWrapper<>();
-							majorIdWrapper.eq("id", majorContent.trim());
-							if (tMajorService.count(majorIdWrapper) == 0) {
-								errorMsgList.add("第" + rowNum + "行：专业ID「" + majorContent + "」不存在，请检查");
-								isValid = false;
-							}
-						} else {
-							// 是名称，查ID
-							QueryWrapper<TMajor> majorWrapper = new QueryWrapper<>();
-							majorWrapper.eq("major_name", majorContent.trim());
-							TMajor major = tMajorService.getOne(majorWrapper);
-							if (major == null) {
-								errorMsgList.add("第" + rowNum + "行：专业名称「" + majorContent + "」不存在，请检查");
-								isValid = false;
-							} else {
-								selection.setMajorId(major.getId());
-							}
-						}
-					}
-
-					// ===== 班级解析（兼容ID/名称，支持逗号/顿号分隔的班级列表） =====
-					String classContent = selection.getClassId();
-					if (oConvertUtils.isEmpty(classContent)) {
-						errorMsgList.add("第" + rowNum + "行：班级不能为空");
-						isValid = false;
-					} else {
-						String[] classNames = classContent.split("[，,、]"); // 按中文顿号、英文逗号、中文逗号分割
-						List<String> validClassIds = new ArrayList<>();
-						for (String singleClassName : classNames) {
-							singleClassName = singleClassName.trim();
-							if (oConvertUtils.isEmpty(singleClassName)) {
-								continue; // 跳过空字符串
-							}
-							if (singleClassName.matches("^\\d{16,}$")) {
-								QueryWrapper<TClass> classIdWrapper = new QueryWrapper<>();
-								classIdWrapper.eq("id", singleClassName);
-								if (tClassService.count(classIdWrapper) == 0) {
-									errorMsgList.add("第" + rowNum + "行：班级ID「" + singleClassName + "」不存在，请检查");
-									isValid = false;
-								} else {
-									validClassIds.add(singleClassName);
-								}
-							} else {
-								QueryWrapper<TClass> classWrapper = new QueryWrapper<>();
-								classWrapper.eq("class_name", singleClassName);
-								TClass clazz = tClassService.getOne(classWrapper);
-								if (clazz == null) {
-									errorMsgList.add("第" + rowNum + "行：班级名称「" + singleClassName + "」不存在，请检查");
-									isValid = false;
-								} else {
-									validClassIds.add(clazz.getId());
-								}
-							}
-						}
-						if (validClassIds.isEmpty() && !classNames[0].trim().isEmpty()) {
-							errorMsgList.add("第" + rowNum + "行：班级「" + classContent + "」验证后无有效班级");
-							isValid = false;
-						} else if (validClassIds.size() == 1) {
-							selection.setClassId(validClassIds.get(0));
-						} else if (validClassIds.size() > 1) {
-							selection.setClassId(String.join(";;CLASS_SPLIT;;", validClassIds));
-						}
+						// 保存原始输入内容，使用行索引作为key
+						rawMajorInputMap.put(rowNum, majorContent.trim());
+						selection.setMajorId(""); // 临时设置为空
 					}
 
 					// ===== 教材解析（兼容ID/名称） =====
@@ -826,26 +774,6 @@ public class TTextbookSelectionController extends JeecgController<TTextbookSelec
 						}
 					}
 
-					// ===== 查重：学年+学期+ISBN+专业+班级 =====
-					if (isValid && oConvertUtils.isNotEmpty(textbookIsbn)) {
-						QueryWrapper<TTextbookSelection> dupWrapper = new QueryWrapper<>();
-						dupWrapper.eq("school_year", selection.getSchoolYear())
-								.eq("semester", selection.getSemester())
-								.eq("textbook_id", selection.getTextbookId())
-								.eq("major_id", selection.getMajorId())
-								.eq("class_id", selection.getClassId());
-						long dupCount = tTextbookSelectionService.count(dupWrapper);
-						if (dupCount > 0) {
-							errorMsgList.add("第" + rowNum + "行：重复记录（学年=" + selection.getSchoolYear()
-									+ "，学期=" + selection.getSemester()
-									+ "，ISBN=" + textbookIsbn
-									+ "，专业=" + selection.getMajorId()
-									+ "，班级=" + selection.getClassId()
-									+ "）已存在，跳过");
-							isValid = false;
-						}
-					}
-
 					// ===== 补充默认值 =====
 					if (isValid) {
 						if (oConvertUtils.isEmpty(selection.getSchoolYear())) {
@@ -859,47 +787,86 @@ public class TTextbookSelectionController extends JeecgController<TTextbookSelec
 						}
 						selection.setCreateTime(new Date());
 						selection.setUpdateTime(new Date());
+						// 将行号附加到selection上，用于后续查找原始输入
+						selection.setRemark(rowNum + ""); // 临时用remark存储行号
 						validList.add(selection);
 					}
 				}
 
-				// 3. 处理错误
+				// 3. 如果有错误，记录警告但不阻止导入（只要还有有效数据）
 				if (!errorMsgList.isEmpty()) {
-					log.error("导入失败，错误信息：{}", errorMsgList);
-					return Result.error("导入失败：\n" + String.join("\n", errorMsgList));
+					log.warn("导入时发现{}处错误，将跳过这些记录", errorMsgList.size());
 				}
+
 				if (validList.isEmpty()) {
-					return Result.error("未检测到有效数据，请检查Excel内容");
+					return Result.error("未检测到有效数据，请检查Excel内容。\n错误信息：\n" + String.join("\n", errorMsgList));
 				}
 
-				// 4. 保存数据 + 生成征订记录（处理班级列表拆分）
+				// 4. 保存数据 + 生成征订记录（根据专业/班级自动拆分）
 				List<TTextbookSelection> finalSaveList = new ArrayList<>();
-				List<TTextbookSelection> selectionsToProcess = new ArrayList<>(validList);
+				List<String> skipMsgList = new ArrayList<>(); // 记录跳过的行及原因
 
-				for (TTextbookSelection selection : selectionsToProcess) {
-					String classIdValue = selection.getClassId();
-					if (classIdValue != null && classIdValue.contains(";;CLASS_SPLIT;;")) {
-						String[] classIds = classIdValue.split(";;CLASS_SPLIT;;");
-						for (String classId : classIds) {
-							classId = classId.trim();
-							if (oConvertUtils.isEmpty(classId)) {
-								continue;
-							}
-							TTextbookSelection newSelection = new TTextbookSelection();
-							newSelection.setMajorId(selection.getMajorId());
-							newSelection.setClassId(classId);
-							newSelection.setTextbookId(selection.getTextbookId());
-							newSelection.setSchoolYear(selection.getSchoolYear());
-							newSelection.setSemester(selection.getSemester());
-							newSelection.setSelectionStatus(selection.getSelectionStatus());
-							newSelection.setRemark(selection.getRemark());
-							newSelection.setCreateTime(new Date());
-							newSelection.setUpdateTime(new Date());
-							finalSaveList.add(newSelection);
-						}
-					} else {
-						finalSaveList.add(selection);
+				// 为每个有效记录查找对应的原始专业输入（通过remark中存储的行号）
+				for (int idx = 0; idx < validList.size(); idx++) {
+					TTextbookSelection selection = validList.get(idx);
+					// 从remark中获取行号（之前临时存储的）
+					Integer rowNum = Integer.parseInt(selection.getRemark());
+					String rawMajorContent = rawMajorInputMap.getOrDefault(rowNum, "");
+					log.info("开始处理第{}行原始专业输入：{}", rowNum, rawMajorContent);
+
+					// 解析专业/班级（支持分号、顿号等多种分隔符）
+					List<TClass> matchedClasses = parseMajorAndClassContent(rawMajorContent, rowNum);
+
+					if (matchedClasses.isEmpty()) {
+						String skipMsg = "第" + rowNum + "行：专业/班级「" + rawMajorContent + "」不存在，已跳过";
+						skipMsgList.add(skipMsg);
+						log.warn(skipMsg);
+						continue;
 					}
+
+					// 去重
+					matchedClasses = matchedClasses.stream().distinct().collect(Collectors.toList());
+
+					// 为每个班级创建一条教材选用记录
+					for (TClass clazz : matchedClasses) {
+						TTextbookSelection newSelection = new TTextbookSelection();
+						newSelection.setMajorId(clazz.getMajorId());
+						newSelection.setClassId(clazz.getId());
+						newSelection.setTextbookId(selection.getTextbookId());
+						newSelection.setSchoolYear(selection.getSchoolYear());
+						newSelection.setSemester(selection.getSemester());
+						newSelection.setSelectionStatus(selection.getSelectionStatus());
+						newSelection.setRemark(selection.getRemark());
+						newSelection.setCreateTime(new Date());
+						newSelection.setUpdateTime(new Date());
+
+						// 查重：学年+学期+教材+专业+班级
+						QueryWrapper<TTextbookSelection> dupWrapper = new QueryWrapper<>();
+						dupWrapper.eq("school_year", newSelection.getSchoolYear())
+								.eq("semester", newSelection.getSemester())
+								.eq("textbook_id", newSelection.getTextbookId())
+								.eq("major_id", newSelection.getMajorId())
+								.eq("class_id", newSelection.getClassId());
+						long dupCount = tTextbookSelectionService.count(dupWrapper);
+						if (dupCount == 0) {
+							finalSaveList.add(newSelection);
+						} else {
+							log.info("跳过重复记录：学年={}, 学期={}, 教材={}, 专业={}, 班级={}",
+									newSelection.getSchoolYear(), newSelection.getSemester(),
+									newSelection.getTextbookId(), newSelection.getMajorId(), newSelection.getClassId());
+						}
+					}
+				}
+
+				if (finalSaveList.isEmpty()) {
+					String errorMsg = "所有记录均无效或重复，未保存任何数据";
+					if (!skipMsgList.isEmpty()) {
+						errorMsg += "\n跳过原因：\n" + String.join("\n", skipMsgList);
+					}
+					if (!errorMsgList.isEmpty()) {
+						errorMsg += "\n格式错误：\n" + String.join("\n", errorMsgList);
+					}
+					return Result.error(errorMsg);
 				}
 
 				tTextbookSelectionService.saveBatch(finalSaveList);
@@ -914,13 +881,206 @@ public class TTextbookSelectionController extends JeecgController<TTextbookSelec
 
 				log.info("导入教材选用后，触发总账单重新汇总");
 
-				return Result.OK("导入成功！共导入" + finalSaveList.size() + "条教材选用记录");
+				// 构建返回信息
+				StringBuilder successMsg = new StringBuilder();
+				successMsg.append("导入成功！共导入").append(finalSaveList.size()).append("条教材选用记录（已按专业自动拆分班级）");
+
+				if (!skipMsgList.isEmpty() || !errorMsgList.isEmpty()) {
+					successMsg.append("\n\n");
+					if (!errorMsgList.isEmpty()) {
+						successMsg.append("【格式错误，已跳过】\n").append(String.join("\n", errorMsgList)).append("\n\n");
+					}
+					if (!skipMsgList.isEmpty()) {
+						successMsg.append("【专业/班级不存在，已跳过】\n").append(String.join("\n", skipMsgList));
+					}
+				}
+
+				return Result.OK(successMsg.toString());
 			}
 		} catch (Exception e) {
 			log.error("Excel导入失败", e);
 			return Result.error("导入失败：" + e.getMessage());
 		}
 		return Result.error("导入失败！");
+	}
+
+	/**
+	 * 根据班级名称查找班级
+	 */
+	private TClass findClassByName(String className) {
+		QueryWrapper<TClass> classWrapper = new QueryWrapper<>();
+		classWrapper.eq("class_name", className.trim());
+		return tClassService.getOne(classWrapper);
+	}
+
+	/**
+	 * 解析专业/班级内容（支持分号、顿号等多种分隔符）
+	 * @param content 原始内容
+	 * @param rowNum 行号（用于日志）
+	 * @return 匹配到的班级列表
+	 */
+	private List<TClass> parseMajorAndClassContent(String content, int rowNum) {
+		List<TClass> result = new ArrayList<>();
+		log.info("第{}行：开始解析专业/班级内容：{}", rowNum, content);
+
+		// 第一步：按分号分割（处理独立组）
+		String[] segments = content.split("[;；]+");
+
+		for (String segment : segments) {
+			segment = segment.trim();
+			if (segment.isEmpty()) continue;
+
+			// 第二步：先尝试将整个段作为班级模式解析（支持 "24计科1、2、3班" 等）
+			List<TClass> segmentClasses = tryExpandClassNumbers(segment);
+
+			if (!segmentClasses.isEmpty()) {
+				// 成功解析出班级
+				result.addAll(segmentClasses);
+			} else {
+				// 没匹配到班级模式，尝试按顿号/逗号分割（处理 "24工商、24财管、24营销" 等）
+				String[] subItems = segment.split("[、,，]+");
+
+				if (subItems.length > 1) {
+					// 有多个子项，分别处理每个
+					for (String subItem : subItems) {
+						subItem = subItem.trim();
+						if (subItem.isEmpty()) continue;
+						List<TClass> subClasses = resolveClassOrMajor(subItem, rowNum);
+						result.addAll(subClasses);
+					}
+				} else {
+					// 单个项，直接解析
+					List<TClass> subClasses = resolveClassOrMajor(segment, rowNum);
+					result.addAll(subClasses);
+				}
+			}
+		}
+
+		// 去重
+		result = result.stream().distinct().collect(Collectors.toList());
+		log.info("第{}行：解析完成，共匹配{}个班级", rowNum, result.size());
+
+		return result;
+	}
+
+	/**
+	 * 解析单个专业/班级项
+	 */
+	private List<TClass> resolveClassOrMajor(String item, int rowNum) {
+		List<TClass> result = new ArrayList<>();
+
+		// 尝试1：匹配 "前缀+班号列表+班" 模式，如 "24计科1、2、3班"
+		List<TClass> expanded = tryExpandClassNumbers(item);
+		if (!expanded.isEmpty()) {
+			result.addAll(expanded);
+			return result;
+		}
+
+		// 尝试2：直接作为班级名称匹配
+		TClass directClass = findClassByName(item);
+		if (directClass != null) {
+			result.add(directClass);
+			return result;
+		}
+
+		// 尝试3：作为专业名称精确匹配
+		QueryWrapper<TMajor> majorWrapper = new QueryWrapper<>();
+		majorWrapper.eq("major_name", item);
+		TMajor major = tMajorService.getOne(majorWrapper);
+		if (major != null) {
+			QueryWrapper<TClass> classWrapper = new QueryWrapper<>();
+			classWrapper.eq("major_id", major.getId());
+			List<TClass> majorClasses = tClassService.list(classWrapper);
+			result.addAll(majorClasses);
+			log.info("第{}行：专业「{}」下找到{}个班级", rowNum, item, majorClasses.size());
+			return result;
+		}
+
+		// 尝试4：模糊匹配专业名称
+		List<TClass> fuzzyClasses = tryFuzzyMatchMajor(item);
+		result.addAll(fuzzyClasses);
+
+		return result;
+	}
+
+	/**
+	 * 尝试展开班号列表模式
+	 * 支持格式：
+	 * - "24计科1、2、3班"
+	 * - "24计科专升本1、2、3班"
+	 * - "24计科1,2,3,4班"
+	 */
+	private List<TClass> tryExpandClassNumbers(String segment) {
+		List<TClass> result = new ArrayList<>();
+
+		// 匹配模式：前缀文字+数字分隔列表+可选"班"字
+		// 例如：24计科1、2、3班 → prefix="24计科", numbers=[1,2,3], suffix="班"
+		java.util.regex.Pattern pattern = java.util.regex.Pattern.compile(
+				"^(.+?)(\\d+(?:[、,，]\\d+)+)(班)?$"
+		);
+		java.util.regex.Matcher matcher = pattern.matcher(segment);
+
+		if (!matcher.find()) {
+			return result;
+		}
+
+		String prefix = matcher.group(1);  // 例如："24计科" 或 "24计科专升本"
+		String numbersStr = matcher.group(2);  // 例如："1、2、3"
+		String suffix = matcher.group(3) != null ? matcher.group(3) : "班";  // "班" 或空
+
+		// 解析班号列表
+		String[] numberParts = numbersStr.split("[、,，]+");
+
+		for (String numPart : numberParts) {
+			numPart = numPart.trim();
+			if (numPart.isEmpty()) continue;
+
+			// 构造完整班级名称
+			String className = prefix + numPart + suffix;
+			TClass clazz = findClassByName(className);
+			if (clazz != null) {
+				result.add(clazz);
+				log.debug("匹配到班级：{}", className);
+			} else {
+				log.debug("未找到班级：{}", className);
+			}
+		}
+
+		return result;
+	}
+
+	/**
+	 * 尝试模糊匹配专业名称
+	 * 例如："24计科" 可能匹配 "24计算机科学与技术"
+	 */
+	private List<TClass> tryFuzzyMatchMajor(String segment) {
+		List<TClass> result = new ArrayList<>();
+
+		// 提取专业部分（去掉年级前缀）
+		String majorPart = segment.replaceFirst("^\\d+", "");
+
+		if (majorPart.isEmpty()) {
+			return result;
+		}
+
+		// 查询所有专业，尝试模糊匹配
+		QueryWrapper<TMajor> majorWrapper = new QueryWrapper<>();
+		majorWrapper.like("major_name", majorPart);
+		List<TMajor> matchedMajors = tMajorService.list(majorWrapper);
+
+		for (TMajor major : matchedMajors) {
+			// 构造完整的专业名称（带年级）
+			String fullMajorName = segment;
+
+			// 尝试直接匹配完整专业名称
+			QueryWrapper<TClass> classWrapper = new QueryWrapper<>();
+			classWrapper.eq("major_id", major.getId());
+			List<TClass> classes = tClassService.list(classWrapper);
+			result.addAll(classes);
+			log.info("模糊匹配专业「{}」→「{}」，找到{}个班级", segment, major.getMajorName(), classes.size());
+		}
+
+		return result;
 	}
 
 	/**

@@ -15,6 +15,12 @@ export const columns: BasicColumn[] = [
     width: 100
   },
   {
+    title: '学院',
+    align:"center",
+    dataIndex: 'collegeName',
+    width: 150
+  },
+  {
     title: '专业',
     align:"center",
     dataIndex: 'majorName',
@@ -53,8 +59,8 @@ export const searchFormSchema: FormSchema[] = [
     component: 'Input',
   },
   {
-    label: "班级",
-    field: 'className',
+    label: "学院",
+    field: 'collegeName',
     component: 'Input',
   },
   {
