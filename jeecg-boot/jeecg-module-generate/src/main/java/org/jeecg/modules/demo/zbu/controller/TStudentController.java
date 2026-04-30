@@ -694,10 +694,17 @@ public class TStudentController extends JeecgController<TStudent, ITStudentServi
 				}
 			}
 
-			// 2. 基础导入参数配置（不依赖实体类注解校验）
+			// 预查询学生角色（只查一次）
+			SysRole studentRole = sysRoleService.getOne(new LambdaQueryWrapper<SysRole>()
+					.eq(SysRole::getRoleCode, STUDENT_ROLE_CODE));
+			if (studentRole == null) {
+				return Result.error("系统未配置【student】角色，请先在角色管理中创建！");
+			}
+
+			// 基础导入参数配置
 			ImportParams importParams = new ImportParams();
-			importParams.setTitleRows(2); // 标题行数量（根据你的Excel模板调整，比如1行标题）
-			importParams.setHeadRows(1); // 表头行数量（比如1行表头）
+			importParams.setTitleRows(2);
+			importParams.setHeadRows(1);
 			importParams.setNeedSave(false);
 
 			// 存储有效数据和失败信息
@@ -718,12 +725,12 @@ public class TStudentController extends JeecgController<TStudent, ITStudentServi
 						TStudent.class,
 						importParams);
 
-				// 5. 逐行校验+过滤（核心：解决空值问题）
+				// 5. 逐行校验+过滤（核心：跳过错误/重复数据，继续导入正确的）
 				for (int i = 0; i < tempList.size(); i++) {
 					totalRow = i + 2; // Excel行号（标题行1行+表头1行，数据从第2行开始）
 					TStudent student = tempList.get(i);
 
-					// ========== 强制空值校验（实体类不改的核心解决方案） ==========
+					// ========== 强制空值校验 ==========
 					// 5.1 学号空值校验
 					String studentId = student.getStudentId();
 					if (oConvertUtils.isEmpty(studentId) || studentId.trim().isEmpty()) {
@@ -732,7 +739,7 @@ public class TStudentController extends JeecgController<TStudent, ITStudentServi
 					}
 					student.setStudentId(studentId.trim()); // 去除学号空格
 
-					// 5.2 学生姓名空值校验（解决核心异常的关键）
+					// 5.2 学生姓名空值校验
 					String studentName = student.getStudentName();
 					if (oConvertUtils.isEmpty(studentName) || studentName.trim().isEmpty()) {
 						failMsgList.add("第" + totalRow + "行：学生姓名为空（学号：" + studentId + "），跳过导入");
@@ -748,7 +755,7 @@ public class TStudentController extends JeecgController<TStudent, ITStudentServi
 						}
 					}
 
-					// 6. 校验学号是否已存在于学生表
+					// 5.4 校验学号是否已存在于学生表
 					QueryWrapper<TStudent> studentWrapper = new QueryWrapper<>();
 					studentWrapper.eq("student_id", student.getStudentId());
 					if (tStudentService.count(studentWrapper) > 0) {
@@ -756,7 +763,7 @@ public class TStudentController extends JeecgController<TStudent, ITStudentServi
 						continue;
 					}
 
-					// 7. 校验学号是否已存在于系统用户表（因为学号用作用户名）
+					// 5.5 校验学号是否已存在于系统用户表
 					SysUser existUser = sysUserService.getOne(new LambdaQueryWrapper<SysUser>()
 							.eq(SysUser::getUsername, student.getStudentId())
 							.eq(SysUser::getDelFlag, CommonConstant.DEL_FLAG_0));
@@ -765,70 +772,69 @@ public class TStudentController extends JeecgController<TStudent, ITStudentServi
 						continue;
 					}
 
-					// 7. 预查询学生角色（只查一次，提升性能）
-					SysRole studentRole = sysRoleService.getOne(new LambdaQueryWrapper<SysRole>()
-							.eq(SysRole::getRoleCode, STUDENT_ROLE_CODE));
-					if (studentRole == null) {
-						return Result.error("系统未配置【student】角色，请先在角色管理中创建！");
-					}
-
-					// 8. 创建系统用户（复刻新增接口逻辑，适配String类型ID）
+					// 5.6 创建系统用户
 					SysUser sysUser = new SysUser();
 					sysUser.setUsername(student.getStudentId()); // 学号作为登录名
 					sysUser.setRealname(student.getStudentName()); // 姓名作为真实名
-					// 密码加密（和新增接口一致）
+					// 密码加密
 					String salt = oConvertUtils.randomGen(8);
 					String plainPwd = student.getStudentId() + "Zbu1";
 					String encryptedPwd = PasswordUtil.encrypt(sysUser.getUsername(), plainPwd, salt);
 					sysUser.setSalt(salt);
 					sysUser.setPassword(encryptedPwd);
-					// 补充系统用户字段（适配你的业务）
-					sysUser.setDepartIds("1"); // 根部门ID，根据你的系统调整
+					// 补充系统用户字段
+					sysUser.setDepartIds("1"); // 根部门ID
 					sysUser.setStatus(1); // 账号启用
 					sysUser.setDelFlag(CommonConstant.DEL_FLAG_0);
 					sysUser.setCreateTime(new Date());
 					sysUser.setLastPwdUpdateTime(new Date());
 					sysUser.setOrgCode(null);
 
-					// 9. 保存系统用户
+					// 5.7 保存系统用户
 					boolean saveUserOk = sysUserService.save(sysUser);
 					if (!saveUserOk) {
-						failMsgList.add("第" + totalRow + "行：学号【" + studentId + "】创建系统账号失败");
+						failMsgList.add("第" + totalRow + "行：学号【" + studentId + "】创建系统账号失败，跳过导入");
 						continue;
 					}
 
-					// 10. 绑定用户-角色关系
+					// 5.8 绑定用户-角色关系
 					SysUserRole userRole = new SysUserRole();
-					userRole.setUserId(sysUser.getId()); // SysUser的ID是String类型
-					userRole.setRoleId(studentRole.getId()); // SysRole的ID适配String
+					userRole.setUserId(sysUser.getId());
+					userRole.setRoleId(studentRole.getId());
 					sysUserRoleService.save(userRole);
 
-					// 11. 关联用户ID到学生表
+					// 5.9 关联用户ID到学生表
 					student.setUserId(sysUser.getId());
-					// 补充创建时间（可选）
 					student.setCreateTime(new Date());
+
 					// 加入有效列表
 					validStudentList.add(student);
 				}
 			}
 
-			// 12. 批量保存有效数据（核心：只存过滤后的数据，避免空值）
+			// 6. 批量保存有效数据
 			if (!validStudentList.isEmpty()) {
 				tStudentService.saveBatch(validStudentList);
 
+				// 7. 为每个成功导入的学生生成征订记录
 				for (TStudent student : validStudentList) {
-					generateStudentSubscription(student);
+					try {
+						generateStudentSubscription(student);
+					} catch (Exception e) {
+						log.warn("学生{}（学号：{}）生成征订记录失败：{}",
+								student.getStudentName(), student.getStudentId(), e.getMessage());
+					}
 				}
 			}
 
-			// 13. 构建返回结果
+			// 8. 构建返回结果
 			StringBuilder result = new StringBuilder();
 			result.append("导入完成！成功导入【").append(validStudentList.size()).append("】条有效数据");
 			if (!failMsgList.isEmpty()) {
-				result.append("；失败【").append(failMsgList.size()).append("】条数据，原因：");
+				result.append("；失败【").append(failMsgList.size()).append("】条数据");
 				// 只展示前10条失败信息，避免返回内容过长
 				List<String> showFailMsg = failMsgList.size() > 10 ? failMsgList.subList(0, 10) : failMsgList;
-				result.append(String.join("；", showFailMsg));
+				result.append("，原因：").append(String.join("；", showFailMsg));
 				if (failMsgList.size() > 10) {
 					result.append("；还有").append(failMsgList.size() - 10).append("条失败信息未展示");
 				}
@@ -972,7 +978,7 @@ public class TStudentController extends JeecgController<TStudent, ITStudentServi
 				subscription.setMajorId(selection.getMajorId()); // 专业ID
 				subscription.setSubscriptionYear(selection.getSchoolYear()); // 征订学年
 				subscription.setSubscriptionSemester(selection.getSemester()); // 征订学期
-				subscription.setSubscribeStatus("未设置"); // 初始征订状态
+				subscription.setSubscribeStatus("0"); // 初始征订状态（未征订）
 				subscription.setRemark("");
 				subscription.setCreateTime(new Date());
 				subscription.setUpdateTime(new Date());

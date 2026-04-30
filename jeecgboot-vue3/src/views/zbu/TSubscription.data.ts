@@ -1,29 +1,29 @@
-import {BasicColumn} from '/@/components/Table';
-import {FormSchema} from '/@/components/Table';
-import { rules} from '/@/utils/helper/validator';
+import { BasicColumn } from '/@/components/Table';
+import { FormSchema } from '/@/components/Table';
+import { rules } from '/@/utils/helper/validator';
 import { render } from '/@/utils/common/renderUtils';
 import { getWeekMonthQuarterYear } from '/@/utils';
 //列表数据
 export const columns: BasicColumn[] = [
   {
     title: '学号',
-    align:"center",
+    align: "center",
     sorter: true,
     dataIndex: 'studentNo'
   },
   {
     title: '学生姓名',
-    align:"center",
+    align: "center",
     dataIndex: 'studentName'
   },
   {
     title: '教材',
-    align:"center",
+    align: "center",
     dataIndex: 'textbookName'
   },
   {
     title: 'ISBN',
-    align:"center",
+    align: "center",
     dataIndex: 'isbn'
   },
   // {
@@ -34,31 +34,31 @@ export const columns: BasicColumn[] = [
   // },
   {
     title: '专业',
-    align:"center",
+    align: "center",
     sorter: true,
     dataIndex: 'majorName'
   },
   {
     title: '学院',
-    align:"center",
+    align: "center",
     sorter: true,
     dataIndex: 'collegeName'
   },
   {
     title: '征订学年',
-    align:"center",
+    align: "center",
     sorter: true,
     dataIndex: 'subscriptionYear'
   },
   {
     title: '征订学期',
-    align:"center",
+    align: "center",
     sorter: true,
     dataIndex: 'subscriptionSemester_dictText'
   },
   {
     title: '征订状态',
-    align:"center",
+    align: "center",
     sorter: true,
     dataIndex: 'subscribeStatus_dictText'
   },
@@ -80,12 +80,12 @@ export const columns: BasicColumn[] = [
   // },
   {
     title: '征订备注',
-    align:"center",
+    align: "center",
     dataIndex: 'remark'
   },
   {
     title: '征订操作时间',
-    align:"center",
+    align: "center",
     dataIndex: 'subscribeTime'
   },
 ];
@@ -138,8 +138,8 @@ export const searchFormSchema: FormSchema[] = [
     label: "征订学期",
     field: 'subscriptionSemester',
     component: 'JDictSelectTag',
-    componentProps:{
-      dictCode:"semester"
+    componentProps: {
+      dictCode: "semester"
     },
     //colProps: {span: 6},
   },
@@ -147,8 +147,12 @@ export const searchFormSchema: FormSchema[] = [
     label: "征订状态",
     field: 'subscribeStatus',
     component: 'JDictSelectTag',
-    componentProps:{
-      dictCode:"subscribe_status"
+    componentProps: {
+      options: [
+        { label: '同意', value: '1' },
+        { label: '不同意', value: '0' }
+      ],
+      placeholder: '请选择征订状态'
     },
     //colProps: {span: 6},
   },
@@ -165,9 +169,9 @@ export const formSchema: FormSchema[] = [
       tableName: 't_student',
       multi: false
     },
-    dynamicRules: ({model,schema}) => {
+    dynamicRules: ({ model, schema }) => {
       return [
-        { required: true, message: '请输入学生!'},
+        { required: true, message: '请输入学生!' },
       ];
     },
   },
@@ -181,9 +185,9 @@ export const formSchema: FormSchema[] = [
       tableName: 't_textbook',
       multi: false
     },
-    dynamicRules: ({model,schema}) => {
+    dynamicRules: ({ model, schema }) => {
       return [
-        { required: true, message: '请输入教材!'},
+        { required: true, message: '请输入教材!' },
       ];
     },
   },
@@ -197,9 +201,9 @@ export const formSchema: FormSchema[] = [
       tableName: 't_textbook_selection',
       multi: false
     },
-    dynamicRules: ({model,schema}) => {
+    dynamicRules: ({ model, schema }) => {
       return [
-        { required: true, message: '请输入教材选用!'},
+        { required: true, message: '请输入教材选用!' },
       ];
     },
   },
@@ -213,9 +217,9 @@ export const formSchema: FormSchema[] = [
       tableName: 't_major',
       multi: false
     },
-    dynamicRules: ({model,schema}) => {
+    dynamicRules: ({ model, schema }) => {
       return [
-        { required: true, message: '请输入专业!'},
+        { required: true, message: '请输入专业!' },
       ];
     },
   },
@@ -223,9 +227,9 @@ export const formSchema: FormSchema[] = [
     label: '征订学年',
     field: 'subscriptionYear',
     component: 'Input',
-    dynamicRules: ({model,schema}) => {
+    dynamicRules: ({ model, schema }) => {
       return [
-        { required: true, message: '请输入征订学年!'},
+        { required: true, message: '请输入征订学年!' },
       ];
     },
   },
@@ -233,12 +237,12 @@ export const formSchema: FormSchema[] = [
     label: '征订学期',
     field: 'subscriptionSemester',
     component: 'JDictSelectTag',
-    componentProps:{
-      dictCode:"semester",
+    componentProps: {
+      dictCode: "semester",
     },
-    dynamicRules: ({model,schema}) => {
+    dynamicRules: ({ model, schema }) => {
       return [
-        { required: true, message: '请输入征订学期!'},
+        { required: true, message: '请输入征订学期!' },
       ];
     },
   },
@@ -246,8 +250,8 @@ export const formSchema: FormSchema[] = [
     label: '征订状态',
     field: 'subscribeStatus',
     component: 'JDictSelectTag',
-    componentProps:{
-      dictCode:"subscribe_status",
+    componentProps: {
+      dictCode: "subscribe_status",
     },
   },
   {
@@ -271,8 +275,8 @@ export const studentEditFormSchema: FormSchema[] = [
     label: '征订状态',
     field: 'subscribeStatus', // 字段名必须和列表的dataIndex一致
     component: 'JDictSelectTag', // 确保组件名正确
-    componentProps:{
-      dictCode:"subscribe_status", // 确保字典码在系统中存在
+    componentProps: {
+      dictCode: "subscribe_status", // 确保字典码在系统中存在
     },
     dynamicRules: () => [{ required: true, message: '请选择征订状态!' }],
     colProps: { span: 24 } // 占满宽度，确保显示
@@ -287,25 +291,25 @@ export const studentEditFormSchema: FormSchema[] = [
 
 // 高级查询数据
 export const superQuerySchema = {
-  studentId: {title: '学生',order: 0,view: 'link_table', type: 'string',},
-  textbookId: {title: '教材',order: 1,view: 'link_table', type: 'string',},
-  selectionId: {title: '教材选用',order: 2,view: 'link_table', type: 'string',},
-  majorId: {title: '专业',order: 3,view: 'link_table', type: 'string',},
-  subscriptionYear: {title: '征订学年',order: 4,view: 'text', type: 'string',},
-  subscriptionSemester: {title: '征订学期',order: 5,view: 'list', type: 'string',dictCode: 'semester',},
-  subscribeStatus: {title: '征订状态',order: 6,view: 'list', type: 'string',dictCode: 'subscribe_status',},
-  remark: {title: '征订备注',order: 7,view: 'text', type: 'string',},
-  subscribeTime: {title: '征订操作时间',order: 8,view: 'datetime', type: 'string',},
+  studentId: { title: '学生', order: 0, view: 'link_table', type: 'string', },
+  textbookId: { title: '教材', order: 1, view: 'link_table', type: 'string', },
+  selectionId: { title: '教材选用', order: 2, view: 'link_table', type: 'string', },
+  majorId: { title: '专业', order: 3, view: 'link_table', type: 'string', },
+  subscriptionYear: { title: '征订学年', order: 4, view: 'text', type: 'string', },
+  subscriptionSemester: { title: '征订学期', order: 5, view: 'list', type: 'string', dictCode: 'semester', },
+  subscribeStatus: { title: '征订状态', order: 6, view: 'list', type: 'string', dictCode: 'subscribe_status', },
+  remark: { title: '征订备注', order: 7, view: 'text', type: 'string', },
+  subscribeTime: { title: '征订操作时间', order: 8, view: 'datetime', type: 'string', },
   // deadline: {title: '征订截止时间',order: 9,view: 'datetime', type: 'string',},
-  createTime: {title: '创建日期',order: 10,view: 'datetime', type: 'string',},
-  updateTime: {title: '更新日期',order: 11,view: 'datetime', type: 'string',},
+  createTime: { title: '创建日期', order: 10, view: 'datetime', type: 'string', },
+  updateTime: { title: '更新日期', order: 11, view: 'datetime', type: 'string', },
 };
 
 /**
  * 流程表单调用这个方法获取formSchema
  * @param param
  */
-export function getBpmFormSchema(_formData): FormSchema[]{
+export function getBpmFormSchema(_formData): FormSchema[] {
   // 默认和原始表单保持一致 如果流程中配置了权限数据，这里需要单独处理formSchema
   return formSchema;
 }

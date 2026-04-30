@@ -654,6 +654,140 @@ public class TTextbookSelectionController extends JeecgController<TTextbookSelec
 	}
 
 	/**
+	 * 教材选用表批量删除（POST请求，支持大数据量）
+	 *
+	 * @param requestBody 请求体，格式为 {"ids":["id1","id2",...]} 或 "id1,id2,id3"
+	 * @return
+	 */
+	@AutoLog(value = "教材选用表-批量删除")
+	@Operation(summary = "教材选用表-批量删除")
+	@RequiresPermissions("zbu:t_textbook_selection:deleteBatch")
+	@PostMapping(value = "/deleteBatch")
+	@Transactional(rollbackFor = Exception.class)
+	public Result<String> deleteBatchPost(@RequestBody String requestBody) {
+		try {
+			if (oConvertUtils.isEmpty(requestBody)) {
+				return Result.error("删除参数不能为空");
+			}
+
+			List<String> selectionIdList = new ArrayList<>();
+
+			// 尝试解析 JSON 数组格式 {"ids":["id1","id2",...]}
+			if (requestBody.contains("[")) {
+				try {
+					int startIdx = requestBody.indexOf("[");
+					int endIdx = requestBody.indexOf("]");
+					if (startIdx >= 0 && endIdx > startIdx) {
+						String idsArray = requestBody.substring(startIdx + 1, endIdx);
+						String[] ids = idsArray.replace("\"", "").replace(" ", "").split(",");
+						for (String id : ids) {
+							if (oConvertUtils.isNotEmpty(id)) {
+								selectionIdList.add(id);
+							}
+						}
+					}
+				} catch (Exception e) {
+					log.warn("解析JSON格式失败，尝试按逗号分割：{}", requestBody);
+				}
+			}
+
+			// 如果不是 JSON 格式，按逗号分割
+			if (selectionIdList.isEmpty()) {
+				String[] ids = requestBody.replace("\"", "").replace(" ", "").split(",");
+				for (String id : ids) {
+					if (oConvertUtils.isNotEmpty(id)) {
+						selectionIdList.add(id);
+					}
+				}
+			}
+
+			if (selectionIdList.isEmpty()) {
+				return Result.error("删除失败：未选择有效记录");
+			}
+
+			log.info("教材选用表批量删除，IDs数量：{}", selectionIdList.size());
+
+			// 1. 查询关联的征订记录
+			QueryWrapper<TSubscription> subWrapper = new QueryWrapper<>();
+			subWrapper.in("selection_id", selectionIdList);
+			List<TSubscription> subList = tSubscriptionService.list(subWrapper);
+			if (!subList.isEmpty()) {
+				List<String> subIdList = subList.stream().map(TSubscription::getId).collect(Collectors.toList());
+
+				// 批量处理个人账单删除
+				List<StudentBill> billList = new ArrayList<>();
+				for (TSubscription sub : subList) {
+					TStudent student = tStudentService.getById(sub.getStudentId());
+					if (student == null || oConvertUtils.isEmpty(student.getStudentId())) {
+						log.warn("征订记录{}的学生ID{}无业务学号，跳过账单删除", sub.getId(), sub.getStudentId());
+						continue;
+					}
+					String studentNo = student.getStudentId();
+
+					String textbookName = "";
+					TTextbook textbook = tTextbookService.getById(sub.getTextbookId());
+					if (textbook != null) {
+						textbookName = textbook.getTextbookName();
+					}
+					if (oConvertUtils.isEmpty(textbookName)) {
+						log.warn("征订记录{}的教材ID{}无名称，跳过账单删除", sub.getId(), sub.getTextbookId());
+						continue;
+					}
+
+					QueryWrapper<StudentBill> billWrapper = new QueryWrapper<>();
+					billWrapper.eq("student_id", studentNo)
+							.eq("subscription_year", sub.getSubscriptionYear())
+							.eq("subscription_semester", sub.getSubscriptionSemester())
+							.eq("textbook_name", textbookName);
+
+					List<StudentBill> subBillList = tStudentBillService.list(billWrapper);
+					log.info("征订记录{}匹配到{}条账单（业务学号：{}，教材：{}）",
+							sub.getId(), subBillList.size(), studentNo, textbookName);
+					billList.addAll(subBillList);
+				}
+
+				if (!billList.isEmpty()) {
+					List<String> billIdList = billList.stream().map(StudentBill::getId).collect(Collectors.toList());
+					boolean isBillDelSuccess = tStudentBillService.removeByIds(billIdList);
+					log.info("批量级联删除{}条个人账单记录，删除结果：{}", billIdList.size(), isBillDelSuccess);
+				} else {
+					log.info("未匹配到关联的个人账单记录，跳过账单删除");
+				}
+
+				QueryWrapper<TReceive> receiveWrapper = new QueryWrapper<>();
+				receiveWrapper.in("subscription_id", subIdList);
+				long receiveDelCount = tReceiveService.count(receiveWrapper);
+				if (receiveDelCount > 0) {
+					tReceiveService.remove(receiveWrapper);
+					log.info("批量级联删除{}条领取记录", receiveDelCount);
+				}
+
+				boolean isSubDelSuccess = tSubscriptionService.removeByIds(subIdList);
+				log.info("批量级联删除{}条征订记录，删除结果：{}", subIdList.size(), isSubDelSuccess);
+			}
+
+			boolean isSelectionDelSuccess = this.tTextbookSelectionService.removeByIds(selectionIdList);
+			log.info("批量删除{}条教材选用记录，删除结果：{}", selectionIdList.size(), isSelectionDelSuccess);
+
+			if (!selectionIdList.isEmpty()) {
+				TTextbookSelection firstDel = tTextbookSelectionService.getById(selectionIdList.get(0));
+				if (firstDel != null) {
+					studentAllBillSummaryController.batchIncrementSummary(
+							tMajorService.getById(firstDel.getMajorId()).getMajorName(),
+							firstDel.getSchoolYear(),
+							firstDel.getSemester());
+					log.info("批量删除教材选用后，触发【增量汇总】总账单（而非全量）");
+				}
+			}
+
+			return Result.OK("批量删除成功！已级联删除关联的征订/领取/账单记录（如有）");
+		} catch (Exception e) {
+			log.error("批量删除教材选用记录失败", e);
+			throw new RuntimeException("批量删除失败：" + e.getMessage());
+		}
+	}
+
+	/**
 	 * 通过id查询
 	 *
 	 * @param id

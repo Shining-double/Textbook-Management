@@ -39,14 +39,8 @@ import org.springframework.web.servlet.ModelAndView;
 import com.alibaba.fastjson.JSON;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import io.swagger.v3.oas.annotations.Operation;
-import org.apache.poi.ss.usermodel.Sheet;
-import org.apache.poi.ss.usermodel.Workbook;
-import org.apache.poi.ss.usermodel.WorkbookFactory;
-import org.jeecgframework.poi.excel.ExcelImportUtil;
-import org.jeecgframework.poi.excel.entity.ImportParams;
 import org.jeecg.common.aspect.annotation.AutoLog;
 import org.apache.shiro.authz.annotation.RequiresPermissions;
-import java.util.NoSuchElementException;
 
 /**
  * @Description: 教材表
@@ -155,7 +149,7 @@ public class TTextbookController extends JeecgController<TTextbook, ITTextbookSe
 	}
 
 	/**
-	 * 批量删除
+	 *  批量删除
 	 *
 	 * @param ids
 	 * @return
@@ -163,65 +157,65 @@ public class TTextbookController extends JeecgController<TTextbook, ITTextbookSe
 	@AutoLog(value = "教材表-批量删除")
 	@Operation(summary = "教材表-批量删除")
 	@RequiresPermissions("zbu:t_textbook:deleteBatch")
-	@PostMapping(value = "/deleteBatch")
-	public Result<String> deleteBatch(@RequestBody Map<String, Object> params) {
-		Object idsObj = params.get("ids");
-		if (idsObj == null) {
-			return Result.error("删除失败：未提供要删除的记录ID");
-		}
-		List<String> ids;
-		if (idsObj instanceof String) {
-			ids = Arrays.asList(((String) idsObj).split(","));
-		} else if (idsObj instanceof List) {
-			ids = (List<String>) idsObj;
-		} else {
-			return Result.error("删除失败：参数格式错误");
-		}
-		this.tTextbookService.removeByIds(ids);
+	@DeleteMapping(value = "/deleteBatch")
+	public Result<String> deleteBatch(@RequestParam(name = "ids", required = true) String ids) {
+		this.tTextbookService.removeByIds(Arrays.asList(ids.split(",")));
 		return Result.OK("批量删除成功!");
 	}
 
 	/**
-	 * 获取所有记录ID（用于全选）
+	 * 教材表批量删除（POST请求，支持大数据量）
 	 *
-	 * @param tTextbook 查询条件
-	 * @return ID列表
+	 * @param requestBody 请求体，格式为 {"ids":["id1","id2",...]} 或 "id1,id2,id3"
+	 * @return
 	 */
-	@Operation(summary = "教材表-获取所有ID")
-	@GetMapping(value = "/getAllIds")
-	public Result<List<String>> getAllIds(TTextbook tTextbook) {
-		QueryWrapper<TTextbook> queryWrapper = new QueryWrapper<>();
-
-		if (oConvertUtils.isNotEmpty(tTextbook.getIsbn())) {
-			String isbn = tTextbook.getIsbn().replace("*", "%");
-			queryWrapper.like("isbn", isbn);
-		}
-		if (oConvertUtils.isNotEmpty(tTextbook.getTextbookName())) {
-			String name = tTextbook.getTextbookName().replace("*", "%");
-			queryWrapper.like("textbook_name", name);
-		}
-		if (oConvertUtils.isNotEmpty(tTextbook.getEnableYear())) {
-			queryWrapper.eq("enable_year", tTextbook.getEnableYear());
-		}
-		if (oConvertUtils.isNotEmpty(tTextbook.getEnableSemester())) {
-			queryWrapper.eq("enable_semester", tTextbook.getEnableSemester());
-		}
-		if (oConvertUtils.isNotEmpty(tTextbook.getStatus())) {
-			queryWrapper.eq("status", tTextbook.getStatus());
-		}
-		if (oConvertUtils.isNotEmpty(tTextbook.getAuthor())) {
-			String author = tTextbook.getAuthor().replace("*", "%");
-			queryWrapper.like("author", author);
-		}
-		if (oConvertUtils.isNotEmpty(tTextbook.getPublisher())) {
-			String publisher = tTextbook.getPublisher().replace("*", "%");
-			queryWrapper.like("publisher", publisher);
+	@AutoLog(value = "教材表-批量删除")
+	@Operation(summary = "教材表-批量删除")
+	@RequiresPermissions("zbu:t_textbook:deleteBatch")
+	@PostMapping(value = "/deleteBatch")
+	public Result<String> deleteBatchPost(@RequestBody String requestBody) {
+		if (oConvertUtils.isEmpty(requestBody)) {
+			return Result.error("删除参数不能为空");
 		}
 
-		queryWrapper.select("id");
-		List<TTextbook> list = tTextbookService.list(queryWrapper);
-		List<String> ids = list.stream().map(TTextbook::getId).collect(Collectors.toList());
-		return Result.OK(ids);
+		List<String> idList = new ArrayList<>();
+
+		// 尝试解析 JSON 数组格式 {"ids":["id1","id2",...]}
+		if (requestBody.contains("[")) {
+			try {
+				int startIdx = requestBody.indexOf("[");
+				int endIdx = requestBody.indexOf("]");
+				if (startIdx >= 0 && endIdx > startIdx) {
+					String idsArray = requestBody.substring(startIdx + 1, endIdx);
+					String[] ids = idsArray.replace("\"", "").replace(" ", "").split(",");
+					for (String id : ids) {
+						if (oConvertUtils.isNotEmpty(id)) {
+							idList.add(id);
+						}
+					}
+				}
+			} catch (Exception e) {
+				log.warn("解析JSON格式失败，尝试按逗号分割：{}", requestBody);
+			}
+		}
+
+		// 如果不是 JSON 格式，按逗号分割
+		if (idList.isEmpty()) {
+			String[] ids = requestBody.replace("\"", "").replace(" ", "").split(",");
+			for (String id : ids) {
+				if (oConvertUtils.isNotEmpty(id)) {
+					idList.add(id);
+				}
+			}
+		}
+
+		if (idList.isEmpty()) {
+			return Result.error("删除参数不能为空");
+		}
+
+		log.info("教材表批量删除，IDs数量：{}", idList.size());
+		this.tTextbookService.removeByIds(idList);
+		return Result.OK("批量删除成功!");
 	}
 
 	/**
@@ -263,124 +257,64 @@ public class TTextbookController extends JeecgController<TTextbook, ITTextbookSe
 	@RequiresPermissions("zbu:t_textbook:importExcel")
 	@RequestMapping(value = "/importExcel", method = RequestMethod.POST)
 	public Result<?> importExcel(HttpServletRequest request, HttpServletResponse response) {
-		try {
-			MultipartHttpServletRequest multipartRequest = (MultipartHttpServletRequest) request;
-			Map<String, MultipartFile> fileMap = multipartRequest.getFileMap();
-			if (fileMap.isEmpty()) {
-				return Result.error("请选择要导入的Excel文件！");
-			}
+		MultipartHttpServletRequest multipartRequest = (MultipartHttpServletRequest) request;
+		MultipartFile file = multipartRequest.getFile("file");
+		if (file == null || file.isEmpty()) {
+			return Result.error("导入失败：文件不能为空");
+		}
 
+		try {
 			ImportParams importParams = new ImportParams();
 			importParams.setTitleRows(2);
 			importParams.setHeadRows(1);
 			importParams.setNeedSave(false);
 
-			List<TTextbook> validList = new ArrayList<>();
-			List<String> failMsgList = new ArrayList<>();
-			int totalRow = 0;
+			List<TTextbook> textbookList = ExcelImportUtil.importExcel(file.getInputStream(), TTextbook.class,
+					importParams);
 
-			for (Map.Entry<String, MultipartFile> entry : fileMap.entrySet()) {
-				MultipartFile file = entry.getValue();
-				if (file.isEmpty()) {
+			if (textbookList == null || textbookList.isEmpty()) {
+				return Result.error("导入失败：Excel内容为空");
+			}
+
+			List<TTextbook> toSaveList = new ArrayList<>();
+			int duplicateCount = 0;
+
+			for (TTextbook textbook : textbookList) {
+				if (oConvertUtils.isEmpty(textbook.getIsbn())) {
+					continue;
+				}
+				if (oConvertUtils.isEmpty(textbook.getEnableYear())) {
+					continue;
+				}
+				if (oConvertUtils.isEmpty(textbook.getEnableSemester())) {
 					continue;
 				}
 
-				byte[] fileBytes;
-				try {
-					fileBytes = file.getBytes();
-				} catch (Exception e) {
-					failMsgList.add("读取文件失败：" + e.getMessage());
+				QueryWrapper<TTextbook> queryWrapper = new QueryWrapper<>();
+				queryWrapper.eq("isbn", textbook.getIsbn());
+				queryWrapper.eq("enable_year", textbook.getEnableYear());
+				queryWrapper.eq("enable_semester", textbook.getEnableSemester());
+				TTextbook existTextbook = tTextbookService.getOne(queryWrapper);
+
+				if (existTextbook != null) {
+					duplicateCount++;
 					continue;
 				}
 
-				try (Workbook workbook = WorkbookFactory.create(new java.io.ByteArrayInputStream(fileBytes))) {
-					if (workbook.getNumberOfSheets() == 0) {
-						failMsgList.add("Excel文件没有工作表，跳过");
-						continue;
-					}
-					Sheet firstSheet = workbook.getSheetAt(0);
-					if (firstSheet == null || firstSheet.getPhysicalNumberOfRows() <= 1) {
-						failMsgList.add("Excel内容为空或只有表头，跳过");
-						continue;
-					}
-				} catch (Exception e) {
-					failMsgList.add("Excel文件格式无效：" + e.getMessage());
-					continue;
-				}
-
-				List<TTextbook> tempList;
-				try {
-					tempList = ExcelImportUtil.importExcel(
-							new java.io.ByteArrayInputStream(fileBytes),
-							TTextbook.class,
-							importParams);
-				} catch (NoSuchElementException e) {
-					log.error("Excel解析失败，可能是空文件或格式问题", e);
-					return Result.error("导入失败：Excel文件内容为空或格式无效，请检查文件是否正确");
-				}
-
-				for (int i = 0; i < tempList.size(); i++) {
-					totalRow = i + 2;
-					TTextbook textbook = tempList.get(i);
-
-					String isbn = textbook.getIsbn();
-					if (oConvertUtils.isEmpty(isbn) || isbn.trim().isEmpty()) {
-						failMsgList.add("第" + totalRow + "行：ISBN为空，跳过导入");
-						continue;
-					}
-					textbook.setIsbn(isbn.trim());
-
-					String enableYear = textbook.getEnableYear();
-					if (oConvertUtils.isEmpty(enableYear) || enableYear.trim().isEmpty()) {
-						failMsgList.add("第" + totalRow + "行：ISBN【" + isbn + "】的启用学年为空，跳过导入");
-						continue;
-					}
-					textbook.setEnableYear(enableYear.trim());
-
-					String enableSemester = textbook.getEnableSemester();
-					if (oConvertUtils.isEmpty(enableSemester) || enableSemester.trim().isEmpty()) {
-						failMsgList.add("第" + totalRow + "行：ISBN【" + isbn + "】的启用学期为空，跳过导入");
-						continue;
-					}
-					textbook.setEnableSemester(enableSemester.trim());
-
-					QueryWrapper<TTextbook> wrapper = new QueryWrapper<>();
-					wrapper.eq("isbn", textbook.getIsbn());
-					wrapper.eq("enable_year", textbook.getEnableYear());
-					wrapper.eq("enable_semester", textbook.getEnableSemester());
-					if (tTextbookService.count(wrapper) > 0) {
-						failMsgList.add("第" + totalRow + "行：ISBN【" + isbn + "】+启用学年【" + enableYear + "】+启用学期【"
-								+ enableSemester + "】已存在，跳过导入");
-						continue;
-					}
-
-					validList.add(textbook);
-				}
+				toSaveList.add(textbook);
 			}
 
-			if (!validList.isEmpty()) {
-				tTextbookService.saveBatch(validList);
+			if (!toSaveList.isEmpty()) {
+				tTextbookService.saveBatch(toSaveList);
 			}
 
-			StringBuilder result = new StringBuilder();
-			result.append("导入完成！成功导入【").append(validList.size()).append("】条有效数据");
-			if (!failMsgList.isEmpty()) {
-				result.append("；失败【").append(failMsgList.size()).append("】条数据，原因：");
-				List<String> showFailMsg = failMsgList.size() > 10 ? failMsgList.subList(0, 10) : failMsgList;
-				result.append(String.join("；", showFailMsg));
-				if (failMsgList.size() > 10) {
-					result.append("；还有").append(failMsgList.size() - 10).append("条失败信息未展示");
-				}
-			}
-
-			if (validList.isEmpty()) {
-				return Result.error(result.toString());
-			} else {
-				return Result.OK(result.toString());
-			}
+			String msg = String.format("导入成功！共 %d 条，新增 %d 条，跳过重复 %d 条",
+					textbookList.size(), toSaveList.size(), duplicateCount);
+			log.info("【教材导入】" + msg);
+			return Result.OK(msg);
 
 		} catch (Exception e) {
-			log.error("Excel导入教材数据失败", e);
+			log.error("【教材导入】失败", e);
 			return Result.error("导入失败：" + e.getMessage());
 		}
 	}

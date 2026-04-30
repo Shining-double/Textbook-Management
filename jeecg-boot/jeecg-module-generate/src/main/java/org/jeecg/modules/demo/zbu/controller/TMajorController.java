@@ -130,6 +130,61 @@ public class TMajorController extends JeecgController<TMajor, ITMajorService> {
 		return Result.OK("批量删除成功!");
 	}
 
+	/**
+	 * 专业表批量删除（POST请求，支持大数据量）
+	 *
+	 * @param requestBody 请求体，格式为 {"ids":["id1","id2",...]} 或 "id1,id2,id3"
+	 * @return
+	 */
+	@AutoLog(value = "专业表-批量删除")
+	@Operation(summary = "专业表-批量删除")
+	@RequiresPermissions("zbu:t_major:deleteBatch")
+	@PostMapping(value = "/deleteBatch")
+	public Result<String> deleteBatchPost(@RequestBody String requestBody) {
+		if (oConvertUtils.isEmpty(requestBody)) {
+			return Result.error("删除参数不能为空");
+		}
+
+		List<String> idList = new ArrayList<>();
+
+		// 尝试解析 JSON 数组格式 {"ids":["id1","id2",...]}
+		if (requestBody.contains("[")) {
+			try {
+				int startIdx = requestBody.indexOf("[");
+				int endIdx = requestBody.indexOf("]");
+				if (startIdx >= 0 && endIdx > startIdx) {
+					String idsArray = requestBody.substring(startIdx + 1, endIdx);
+					String[] ids = idsArray.replace("\"", "").replace(" ", "").split(",");
+					for (String id : ids) {
+						if (oConvertUtils.isNotEmpty(id)) {
+							idList.add(id);
+						}
+					}
+				}
+			} catch (Exception e) {
+				log.warn("解析JSON格式失败，尝试按逗号分割：{}", requestBody);
+			}
+		}
+
+		// 如果不是 JSON 格式，按逗号分割
+		if (idList.isEmpty()) {
+			String[] ids = requestBody.replace("\"", "").replace(" ", "").split(",");
+			for (String id : ids) {
+				if (oConvertUtils.isNotEmpty(id)) {
+					idList.add(id);
+				}
+			}
+		}
+
+		if (idList.isEmpty()) {
+			return Result.error("删除参数不能为空");
+		}
+
+		log.info("专业表批量删除，IDs数量：{}", idList.size());
+		this.tMajorService.removeByIds(idList);
+		return Result.OK("批量删除成功!");
+	}
+
 	@Operation(summary = "专业表-通过id查询")
 	@GetMapping(value = "/queryById")
 	public Result<TMajor> queryById(@RequestParam(name = "id", required = true) String id) {

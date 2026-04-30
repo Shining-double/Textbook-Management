@@ -113,13 +113,22 @@ public class TSubscriptionController extends JeecgController<TSubscription, ITSu
 													  @RequestParam(name = "pageSize", defaultValue = "10") Integer pageSize,
 													  HttpServletRequest req) {
 
+		// 调试：打印前端传入的征订状态参数
+		String subscribeStatusParam = req.getParameter("subscribeStatus");
+		log.info("征订列表查询 - 前端传入subscribeStatus参数值：{}", subscribeStatusParam);
+		log.info("征订列表查询 - 实体类subscribeStatus字段值：{}", tSubscription.getSubscribeStatus());
+
 		// 自定义查询规则
 		Map<String, QueryRuleEnum> customeRuleMap = new HashMap<>();
 		// 自定义多选的查询规则为：LIKE_WITH_OR
 		customeRuleMap.put("subscriptionSemester", QueryRuleEnum.LIKE_WITH_OR);
-		customeRuleMap.put("subscribeStatus", QueryRuleEnum.LIKE_WITH_OR);
+		// 征订状态改为精确匹配（EQ），避免 LIKE 匹配错误
+		customeRuleMap.put("subscribeStatus", QueryRuleEnum.EQ);
 		QueryWrapper<TSubscription> queryWrapper = QueryGenerator.initQueryWrapper(tSubscription, req.getParameterMap(),
 				customeRuleMap);
+
+		// 调试：打印生成的SQL
+		log.info("征订列表查询 - 生成的SQL条件：{}", queryWrapper.getCustomSqlSegment());
 
 		// 学院模糊查询
 		String collegeName = req.getParameter("collegeName");
@@ -132,6 +141,7 @@ public class TSubscriptionController extends JeecgController<TSubscription, ITSu
 
 		Page<TSubscription> page = new Page<TSubscription>(pageNo, pageSize);
 		IPage<TSubscription> pageList = tSubscriptionService.page(page, queryWrapper);
+		log.info("征订列表查询 - 总记录数：{}", pageList.getTotal());
 		return Result.OK(pageList);
 	}
 

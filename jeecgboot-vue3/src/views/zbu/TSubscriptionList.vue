@@ -68,8 +68,8 @@
         <template v-if="column.dataIndex === 'majorName'">
           {{ record.majorName || '未知专业' }}
         </template>
-        <template v-if="column.dataIndex === 'subscribeStatus'">
-          {{ record.subscribeStatus === '1' ? '已征订' : '未征订' }}
+        <template v-if="column.dataIndex === 'subscribeStatus_dictText'">
+          {{ getSubscribeStatusText(record.subscribeStatus) }}
         </template>
         <template v-if="column.dataIndex === 'subscriptionSemester'">
           {{ record.subscriptionSemester === '1' ? '第一学期' : '第二学期' }}
@@ -105,6 +105,19 @@ type Recordable = { [key: string]: any };
 const fieldPickers = reactive({});
 const queryParam = reactive<any>({});
 const { createMessage } = useMessage();
+
+const getSubscribeStatusText = (status: string) => {
+  if (status === '1') return '同意';
+  if (status === '2') return '不同意';
+  return '未征订';
+};
+
+const normalizeSubscribeStatus = (status: string | undefined) => {
+  if (!status) return '0';
+  if (status === '1' || status === '2') return status;
+  if (status === '未设置' || status === '未征订' || status === '' || status === '0') return '0';
+  return '0';
+};
 
 const [registerModal, {openModal}] = useModal();
 const currentStudentId = ref("");
@@ -203,6 +216,16 @@ const fetchTableData = async (params = {}) => {
 
 
     // 3. 格式化数据（直接使用视图返回的数据）
+    // 调试：打印前3条原始数据的征订状态
+    if (rawRecords.length > 0) {
+      console.log('【调试】原始数据前3条subscribe_status值：',
+        rawRecords.slice(0, 3).map(item => ({
+          subscribeStatus: item.subscribeStatus,
+          subscribe_status: item.subscribe_status,
+          allKeys: Object.keys(item).filter(k => k.toLowerCase().includes('subscri') || k.toLowerCase().includes('status'))
+        }))
+      );
+    }
     const formattedRecords: Recordable[] = rawRecords.map(item => ({
       ...item,
       id: item.id,
@@ -218,8 +241,8 @@ const fetchTableData = async (params = {}) => {
       collegeName: item.collegeName || item.college_name || '未知学院',
       subscriptionSemester: item.subscriptionSemester || item.subscription_semester || '',
       subscriptionSemester_dictText: (item.subscriptionSemester || item.subscription_semester) === '1' ? '第一学期' : '第二学期',
-      subscribeStatus: item.subscribeStatus || item.subscribe_status || '0',
-      subscribeStatus_dictText: (item.subscribeStatus || item.subscribe_status) === '1' ? '已征订' : '未征订',
+      subscribeStatus: normalizeSubscribeStatus(item.subscribeStatus || item.subscribe_status),
+      subscribeStatus_dictText: getSubscribeStatusText(normalizeSubscribeStatus(item.subscribeStatus || item.subscribe_status)),
       key: item.id || Math.random().toString(36).substr(2, 9)
     }));
 
