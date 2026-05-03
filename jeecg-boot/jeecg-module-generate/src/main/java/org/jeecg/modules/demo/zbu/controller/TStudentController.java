@@ -747,6 +747,70 @@ public class TStudentController extends JeecgController<TStudent, ITStudentServi
 					}
 					student.setStudentName(studentName.trim()); // 去除姓名空格
 
+					// 5.2.1 班级空值/存在性校验（支持按ID或名称查找）
+					String classId = student.getClassId();
+
+					if (oConvertUtils.isEmpty(classId) || classId.trim().isEmpty()) {
+						failMsgList.add("第" + totalRow + "行：班级为空（学号：" + studentId + "），跳过导入");
+						continue;
+					}
+
+					TClass existClass = tClassService.getById(classId);
+					if (existClass == null) {
+						// 按ID没找到，尝试按班级名称查找
+						existClass = tClassService.getOne(new LambdaQueryWrapper<TClass>()
+								.eq(TClass::getClassName, classId.trim()));
+					}
+
+					if (existClass == null) {
+						failMsgList.add("第" + totalRow + "行：班级【" + classId + "】不存在（学号：" + studentId + "），跳过导入");
+						continue;
+					}
+					// 更新classId为实际找到的班级ID
+					classId = existClass.getId();
+					student.setClassId(classId);
+
+					// 5.2.2 专业空值/存在性校验（支持按ID或名称查找）
+					String majorIdInput = student.getMajorId(); // Excel中原始输入值
+
+					if (oConvertUtils.isNotEmpty(majorIdInput)) {
+						// Excel中填写了专业，必须校验该专业是否存在
+						TMajor inputMajor = tMajorService.getById(majorIdInput);
+						if (inputMajor == null) {
+							// 按ID没找到，尝试按专业名称查找
+							inputMajor = tMajorService.getOne(new LambdaQueryWrapper<TMajor>()
+									.eq(TMajor::getMajorName, majorIdInput.trim()));
+						}
+
+						if (inputMajor == null) {
+							failMsgList
+									.add("第" + totalRow + "行：专业【" + majorIdInput + "】不存在（学号：" + studentId + "），跳过导入");
+							continue;
+						}
+						// 更新majorId为实际找到的专业ID
+						majorIdInput = inputMajor.getId();
+						student.setMajorId(majorIdInput);
+
+						// 额外校验：Excel中的专业是否与班级关联的专业一致
+						String classMajorId = existClass.getMajorId();
+						if (oConvertUtils.isNotEmpty(classMajorId) && !classMajorId.equals(majorIdInput)) {
+							TMajor classMajor = tMajorService.getById(classMajorId);
+							log.warn("第{}行：学号【{}】的专业【{}】与班级【{}】关联的专业【{}】不一致",
+									totalRow, studentId, inputMajor.getMajorName(), existClass.getClassName(),
+									classMajor != null ? classMajor.getMajorName() : classMajorId);
+							// 不强制要求一致，仅警告
+						}
+					} else {
+						// Excel中没有填写专业，使用班级关联的专业
+						String majorIdFromClass = existClass.getMajorId();
+						if (oConvertUtils.isEmpty(majorIdFromClass)) {
+							failMsgList.add("第" + totalRow + "行：班级【" + existClass.getClassName() + "】未关联专业且未指定专业（学号："
+									+ studentId + "），跳过导入");
+							continue;
+						}
+						student.setMajorId(majorIdFromClass);
+					}
+
 					// 5.3 辅导员权限校验：检查学生的班级是否属于该辅导员管理
 					if (isCounselor && !isAdmin) {
 						if (!counselorClassIds.contains(student.getClassId())) {

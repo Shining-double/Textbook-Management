@@ -4,6 +4,7 @@ import { rules } from '/@/utils/helper/validator';
 import { render } from '/@/utils/common/renderUtils';
 import { getWeekMonthQuarterYear } from '/@/utils';
 import { getMajorList, getClassListByMajor } from './TStudent.api';
+import { defHttp } from '/@/utils/http/axios';
 //列表数据
 export const columns: BasicColumn[] = [
   {
@@ -48,7 +49,6 @@ export const searchFormSchema: FormSchema[] = [
     label: "学号",
     field: 'studentId',
     component: 'Input',
-    //colProps: {span: 6},
   },
   {
     label: "学生姓名",
@@ -56,21 +56,70 @@ export const searchFormSchema: FormSchema[] = [
     component: 'JInput',
   },
   {
-    label: "专业",
-    field: 'majorName',
-    component: 'Input',
-    //colProps: {span: 6},
-  },
-  {
     label: "学院",
     field: 'collegeName',
-    component: 'Input',
-    //colProps: {span: 6},
+    component: 'ApiSelect',
+    componentProps: {
+      api: () => defHttp.get({ url: '/zbu/tCollege/list', params: { pageSize: 999, pageNo: 1 } }).then(res => {
+        const records = res.records || [];
+        return records.map(item => ({
+          label: item.collegeName,
+          value: item.collegeName
+        }));
+      }),
+      placeholder: '请选择学院'
+    },
+  },
+  {
+    label: "专业",
+    field: 'majorName',
+    component: 'ApiSelect',
+    componentProps: ({ formModel }) => {
+      const collegeName = formModel.collegeName;
+      return {
+        api: () => defHttp.get({ url: '/zbu/tMajor/list', params: { pageSize: 9999, pageNo: 1 } }).then(res => {
+          const records = res.records || [];
+          if (!collegeName) return records.map(item => ({ label: item.majorName, value: item.majorName }));
+          return defHttp.get({ url: '/zbu/tCollege/list', params: { pageSize: 999, pageNo: 1, collegeName } }).then(colRes => {
+            const colleges = colRes.records || [];
+            const college = colleges.find(c => c.collegeName === collegeName);
+            const collegeId = college ? college.id : null;
+            return records
+              .filter(item => !collegeId || item.collegeId === collegeId)
+              .map(item => ({ label: item.majorName, value: item.majorName }));
+          });
+        }),
+        placeholder: collegeName ? '请选择专业' : '请先选择学院',
+        disabled: !collegeName,
+        immediate: true
+      };
+    },
   },
   {
     label: "班级",
     field: 'className',
-    component: 'Input',
+    component: 'ApiSelect',
+    componentProps: ({ formModel }) => {
+      const majorName = formModel.majorName;
+      return {
+        api: () => defHttp.get({ url: '/zbu/tClass/list', params: { pageSize: 9999, pageNo: 1 } }).then(res => {
+          const records = res.records || [];
+          if (!majorName) return records.map(item => ({ label: item.className, value: item.className }));
+          return defHttp.get({ url: '/zbu/tMajor/list', params: { pageSize: 999, pageNo: 1, majorName } }).then(majRes => {
+            const majors = majRes.records || [];
+            const major = majors.find(m => m.majorName === majorName);
+            const majorId = major ? major.id : null;
+            return records
+              .filter(item => !majorId || item.majorId === majorId)
+              .map(item => ({ label: item.className, value: item.className }));
+          });
+        }),
+        placeholder: majorName ? '请选择班级' : '请先选择专业',
+        disabled: !majorName,
+        immediate: false
+      };
+    },
+    ifShow: ({ values }) => !!values.majorName,
   },
   {
     label: "状态",
@@ -79,13 +128,11 @@ export const searchFormSchema: FormSchema[] = [
     componentProps: {
       dictCode: "use_state"
     },
-    //colProps: {span: 6},
   },
   {
     label: "入学年份",
     field: 'admissionYear',
     component: 'Input',
-    //colProps: {span: 6},
   },
 ];
 //表单数据

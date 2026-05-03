@@ -4,6 +4,7 @@
       @register="registerTable"
       :rowSelection="tableRowSelection"
       :form-config="tableFormConfig"
+      :class="{ 'hide-search-form': !isAdmin && !isCounselor }"
     >
       <template #tableTitle>
         <!--  修改1：所有角色显示批量修改按钮（区分文字） -->
@@ -89,6 +90,7 @@ import {ref, reactive, computed, unref, onMounted} from 'vue';
 import {BasicTable, useTable, TableAction} from '/@/components/Table';
 import {useModal} from '/@/components/Modal';
 import { useListPage } from '/@/hooks/system/useListPage'
+import { defHttp } from '/@/utils/http/axios';
 import TSubscriptionModal from './components/TSubscriptionModal.vue'
 import {columns, searchFormSchema, superQuerySchema} from './TSubscription.data';
 import {
@@ -239,6 +241,7 @@ const fetchTableData = async (params = {}) => {
       isbn: item.isbn || '',
       majorName: item.majorName || item.major_name || '未知专业',
       collegeName: item.collegeName || item.college_name || '未知学院',
+      className: item.className || item.class_name || '',
       subscriptionSemester: item.subscriptionSemester || item.subscription_semester || '',
       subscriptionSemester_dictText: (item.subscriptionSemester || item.subscription_semester) === '1' ? '第一学期' : '第二学期',
       subscribeStatus: normalizeSubscribeStatus(item.subscribeStatus || item.subscribe_status),
@@ -249,6 +252,32 @@ const fetchTableData = async (params = {}) => {
     // 4. 仅管理员/辅导员执行前端筛选
     let filteredRecords = [...formattedRecords];
     if ((unref(isAdmin) || unref(isCounselor)) && Object.keys(params).length > 0) {
+      // 班级筛选：通过班级名查找学生ID，再按学生ID过滤
+      if (params.className) {
+        try {
+          const className = params.className.trim();
+          // 1. 查找班级获取classId
+          const classRes = await defHttp.get({ url: '/zbu/tClass/list', params: { pageSize: 999, pageNo: 1, className } });
+          const classRecords = classRes.records || [];
+          const classIds = classRecords.map((c: any) => c.id);
+          if (classIds.length > 0) {
+            // 2. 查找该班级下的所有学生
+            const stuRes = await defHttp.get({ url: '/zbu/tStudent/list', params: { pageSize: 9999, pageNo: 1 } });
+            const stuRecords = stuRes.records || [];
+            const studentIdsInClass = stuRecords
+              .filter((s: any) => classIds.includes(s.classId))
+              .map((s: any) => s.id);
+            // 3. 按学生ID过滤征订记录
+            filteredRecords = filteredRecords.filter(item =>
+              studentIdsInClass.includes(item.studentId)
+            );
+          } else {
+            filteredRecords = [];
+          }
+        } catch (e) {
+          console.error('班级筛选失败：', e);
+        }
+      }
       if (params.studentId) {
         const searchKey = params.studentId.trim().toLowerCase();
         filteredRecords = filteredRecords.filter(item =>
@@ -256,8 +285,8 @@ const fetchTableData = async (params = {}) => {
           (item.studentName || '').toLowerCase().includes(searchKey)
         );
       }
-      if (params.majorId) {
-        const searchKey = params.majorId.trim().toLowerCase();
+      if (params.majorName) {
+        const searchKey = params.majorName.trim().toLowerCase();
         filteredRecords = filteredRecords.filter(item =>
           (item.majorName || '').toLowerCase().includes(searchKey)
         );
@@ -351,8 +380,8 @@ const { prefixCls, tableContext, onExportXls, onImportXls } = useListPage({
       showAdvancedButton: true,
       fieldMapToNumber: [],
       fieldMapToTime: [],
-      show: false
     },
+    useSearchForm: unref(isAdmin) || unref(isCounselor),
     //  学生端不渲染操作列
     actionColumn: unref(isAdmin) || unref(isCounselor) ? {
       width: 120,
@@ -577,5 +606,10 @@ onMounted(async () => {
 // 可选：调整整个搜索区域的上下内边距
 :deep(.ant-form) {
   padding: 8px 0;
+}
+
+// 学生端隐藏整个搜索区域
+.hide-search-form :deep(.ant-table-form-container) {
+  display: none !important;
 }
 </style>

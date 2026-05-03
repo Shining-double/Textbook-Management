@@ -1,9 +1,10 @@
-﻿﻿﻿﻿<template>
+﻿﻿<template>
   <div>
     <BasicTable
       @register="registerTable"
       :rowSelection="rowSelection"
       :form-config="tableFormConfig"
+      :class="{ 'hide-search-form': !isAdmin && !isCounselor }"
     >
       <template #tableTitle>
         <!-- 所有角色都显示批量修改按钮（区分文字） -->
@@ -94,6 +95,7 @@ import {ref, reactive, computed, unref, onMounted} from 'vue';
 import {BasicTable, useTable, TableAction} from '/@/components/Table';
 import {useModal} from '/@/components/Modal';
 import { useListPage } from '/@/hooks/system/useListPage'
+import { defHttp } from '/@/utils/http/axios';
 import TReceiveModal from './components/TReceiveModal.vue'
 import {columns, searchFormSchema, superQuerySchema} from './TReceive.data';
 import {
@@ -292,12 +294,88 @@ const fetchTableData = async (params = {}) => {
         console.log('【领取表筛选】过滤后记录数：', filteredRecords.length);
         console.log('【领取表筛选】过滤后记录状态：', filteredRecords.map(item => ({id: item.id, receiveStatus: item.receiveStatus, receiveStatus_dictText: item.receiveStatus_dictText})));
       }
-      if (params.collegeName) {
-        const searchKey = params.collegeName.trim().toLowerCase();
-        filteredRecords = filteredRecords.filter(item => {
-          // 使用学院名称进行模糊匹配
-          return item.collegeName.toLowerCase().includes(searchKey);
-        });
+      // 学院筛选（通过学院查找专业，再查找学生ID来过滤）
+      if (params.collegeName || params.majorName || params.className) {
+        // 收集所有需要匹配的学生ID
+        let targetStudentIds = null;
+
+        // 优先按班级筛选
+        if (params.className) {
+          try {
+            const classRes = await defHttp.get({ url: '/zbu/tClass/list', params: { pageSize: 999, pageNo: 1, className: params.className } });
+            const classRecords = classRes.records || [];
+            const classIds = classRecords.map((c: any) => c.id);
+            if (classIds.length > 0) {
+              const stuRes = await defHttp.get({ url: '/zbu/tStudent/list', params: { pageSize: 9999, pageNo: 1 } });
+              const stuRecords = stuRes.records || [];
+              targetStudentIds = stuRecords
+                .filter((s: any) => classIds.includes(s.classId))
+                .map((s: any) => s.id);
+            } else {
+              targetStudentIds = [];
+            }
+          } catch (e) {
+            console.error('班级筛选失败：', e);
+          }
+        }
+        // 其次按专业筛选
+        else if (params.majorName) {
+          try {
+            const majorRes = await defHttp.get({ url: '/zbu/tMajor/list', params: { pageSize: 999, pageNo: 1, majorName: params.majorName } });
+            const majorRecords = majorRes.records || [];
+            const majorIds = majorRecords.map((m: any) => m.id);
+            if (majorIds.length > 0) {
+              const stuRes = await defHttp.get({ url: '/zbu/tStudent/list', params: { pageSize: 9999, pageNo: 1 } });
+              const stuRecords = stuRes.records || [];
+              targetStudentIds = stuRecords
+                .filter((s: any) => majorIds.includes(s.majorId))
+                .map((s: any) => s.id);
+            } else {
+              targetStudentIds = [];
+            }
+          } catch (e) {
+            console.error('专业筛选失败：', e);
+          }
+        }
+        // 只按学院筛选
+        else if (params.collegeName) {
+          try {
+            const collegeRes = await defHttp.get({ url: '/zbu/tCollege/list', params: { pageSize: 999, pageNo: 1, collegeName: params.collegeName } });
+            const collegeRecords = collegeRes.records || [];
+            const collegeIds = collegeRecords.map((c: any) => c.id);
+            if (collegeIds.length > 0) {
+              const majorRes = await defHttp.get({ url: '/zbu/tMajor/list', params: { pageSize: 9999, pageNo: 1 } });
+              const majorRecords = majorRes.records || [];
+              const majorIdsInCollege = majorRecords
+                .filter((m: any) => collegeIds.includes(m.collegeId))
+                .map((m: any) => m.id);
+              if (majorIdsInCollege.length > 0) {
+                const stuRes = await defHttp.get({ url: '/zbu/tStudent/list', params: { pageSize: 9999, pageNo: 1 } });
+                const stuRecords = stuRes.records || [];
+                targetStudentIds = stuRecords
+                  .filter((s: any) => majorIdsInCollege.includes(s.majorId))
+                  .map((s: any) => s.id);
+              } else {
+                targetStudentIds = [];
+              }
+            } else {
+              targetStudentIds = [];
+            }
+          } catch (e) {
+            console.error('学院筛选失败：', e);
+          }
+        }
+
+        // 应用学生ID过滤
+        if (targetStudentIds !== null) {
+          if (targetStudentIds.length === 0) {
+            filteredRecords = [];
+          } else {
+            filteredRecords = filteredRecords.filter(item =>
+              targetStudentIds.includes(item.receiveOperator || item.studentId)
+            );
+          }
+        }
       }
     }
 
@@ -347,8 +425,8 @@ const { prefixCls, tableContext, onExportXls, onImportXls } = useListPage({
       showAdvancedButton: true,
       fieldMapToNumber: [],
       fieldMapToTime: [],
-      show: false
     },
+    useSearchForm: unref(isAdmin) || unref(isCounselor),
     actionColumn: unref(isAdmin) || unref(isCounselor) ? {
       width: 120,
       fixed:'right'
@@ -556,5 +634,9 @@ onMounted(async () => {
   width: 100% !important;
   min-width: 130px !important;
   white-space: nowrap; /* 禁止文字换行 */
+}
+
+.hide-search-form :deep(.ant-table-form-container) {
+  display: none !important;
 }
 </style>

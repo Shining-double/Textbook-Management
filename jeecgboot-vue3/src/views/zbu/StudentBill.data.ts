@@ -3,6 +3,7 @@ import { FormSchema } from '/@/components/Table';
 import { rules } from '/@/utils/helper/validator';
 import { render } from '/@/utils/common/renderUtils';
 import { getWeekMonthQuarterYear } from '/@/utils';
+import { defHttp } from '/@/utils/http/axios';
 //列表数据
 export const columns: BasicColumn[] = [
   {
@@ -101,19 +102,93 @@ export const searchFormSchema: FormSchema[] = [
     component: 'Input',
   },
   {
-    label: "班级",
-    field: 'className',
-    component: 'Input',
+    label: "学院",
+    field: 'collegeName',
+    component: 'ApiSelect',
+    componentProps: {
+      api: () => defHttp.get({ url: '/zbu/tCollege/list', params: { pageSize: 999, pageNo: 1 } }).then(res => {
+        const records = res.records || [];
+        return records.map(item => ({
+          label: item.collegeName,
+          value: item.collegeName
+        }));
+      }),
+      placeholder: '请选择学院'
+    },
   },
   {
     label: "专业",
     field: 'majorName',
-    component: 'Input',
+    component: 'ApiSelect',
+    componentProps: ({ formModel }) => {
+      const collegeName = formModel.collegeName;
+      return {
+        api: () => defHttp.get({ url: '/zbu/tMajor/list', params: { pageSize: 9999, pageNo: 1 } }).then(res => {
+          const records = res.records || [];
+          if (!collegeName) return records.map(item => ({ label: item.majorName, value: item.majorName }));
+          // 先找到学院
+          return defHttp.get({ url: '/zbu/tCollege/list', params: { pageSize: 999, pageNo: 1, collegeName } }).then(colRes => {
+            const colleges = colRes.records || [];
+            const college = colleges.find(c => c.collegeName === collegeName);
+            const collegeId = college ? college.id : null;
+            return records
+              .filter(item => !collegeId || item.collegeId === collegeId)
+              .map(item => ({ label: item.majorName, value: item.majorName }));
+          });
+        }),
+        placeholder: collegeName ? '请选择专业' : '请先选择学院',
+        disabled: !collegeName,
+        immediate: true
+      };
+    },
+  },
+  {
+    label: "班级",
+    field: 'className',
+    component: 'ApiSelect',
+    componentProps: ({ formModel }) => {
+      const majorName = formModel.majorName;
+      return {
+        api: () => defHttp.get({ url: '/zbu/tClass/list', params: { pageSize: 9999, pageNo: 1 } }).then(res => {
+          const records = res.records || [];
+          if (!majorName) return records.map(item => ({ label: item.className, value: item.className }));
+          // 先找到专业
+          return defHttp.get({ url: '/zbu/tMajor/list', params: { pageSize: 999, pageNo: 1, majorName } }).then(majRes => {
+            const majors = majRes.records || [];
+            const major = majors.find(m => m.majorName === majorName);
+            const majorId = major ? major.id : null;
+            return records
+              .filter(item => !majorId || item.majorId === majorId)
+              .map(item => ({ label: item.className, value: item.className }));
+          });
+        }),
+        placeholder: majorName ? '请选择班级' : '请先选择专业',
+        disabled: !majorName,
+        immediate: false
+      };
+    },
+    ifShow: ({ values }) => !!values.majorName,
   },
   {
     label: "征订学年",
     field: 'subscriptionYear',
-    component: 'Input',
+    component: 'ApiSelect',
+    componentProps: {
+      api: () => defHttp.get({ url: '/zbu/tSubscription/list', params: { pageSize: 1, pageNo: 1 } }).then(() => {
+        // 从数据库动态获取所有不重复的征订学年
+        return defHttp.get({ url: '/zbu/tSubscription/list', params: { pageSize: 99999, pageNo: 1 } }).then(res => {
+          const records = res.records || [];
+          // 提取所有征订学年并去重
+          const years = [...new Set(records.map(item => item.subscriptionYear).filter(Boolean))];
+          // 排序并返回选项
+          return years.sort().map(year => ({
+            label: year,
+            value: year
+          }));
+        });
+      }),
+      placeholder: '请选择征订学年'
+    },
   },
   {
     label: "征订学期",
@@ -126,12 +201,26 @@ export const searchFormSchema: FormSchema[] = [
   {
     label: "征订状态",
     field: 'subscribeStatus',
-    component: 'Input',
+    component: 'JDictSelectTag',
+    componentProps: {
+      options: [
+        { label: '已征订', value: '1' },
+        { label: '未征订', value: '0' }
+      ],
+      placeholder: '请选择征订状态'
+    },
   },
   {
     label: "领取状态",
     field: 'receiveStatus',
-    component: 'Input',
+    component: 'JDictSelectTag',
+    componentProps: {
+      options: [
+        { label: '已领取', value: '1' },
+        { label: '未领取', value: '0' }
+      ],
+      placeholder: '请选择领取状态'
+    },
   },
 ];
 //表单数据

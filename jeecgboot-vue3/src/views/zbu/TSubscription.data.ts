@@ -3,6 +3,7 @@ import { FormSchema } from '/@/components/Table';
 import { rules } from '/@/utils/helper/validator';
 import { render } from '/@/utils/common/renderUtils';
 import { getWeekMonthQuarterYear } from '/@/utils';
+import { defHttp } from '/@/utils/http/axios';
 //列表数据
 export const columns: BasicColumn[] = [
   {
@@ -95,18 +96,23 @@ export const searchFormSchema: FormSchema[] = [
     label: "新生届号",
     field: 'studentIdPrefix',
     component: 'JDictSelectTag',
-    componentProps: {
-      options: [
-        { label: '22', value: '22' },
-        { label: '23', value: '23' },
-        { label: '24', value: '24' },
-        { label: '25', value: '25' },
-        { label: '26', value: '26' },
-        { label: '27', value: '27' },
-        { label: '28', value: '28' },
-        { label: '29', value: '29' }
-      ],
-      placeholder: '请选择新生届号'
+    componentProps: () => {
+      const now = new Date();
+      const currentYear = now.getFullYear();
+      const currentMonth = now.getMonth() + 1; // 1-12
+      // 9月之前：最新一届是前一年（如2026年9月前，最新是25届）
+      // 9月及之后：最新一届是当年（如2026年9月后，最新是26届）
+      let startYear = currentMonth < 9 ? currentYear - 1 : currentYear;
+      const options = [];
+      for (let i = 0; i < 4; i++) {
+        const year = startYear - i;
+        const label = String(year).slice(-2); // 取后两位，如 26、25
+        options.push({ label, value: label });
+      }
+      return {
+        options,
+        placeholder: '请选择新生届号'
+      };
     },
     //colProps: {span: 6},
   },
@@ -117,21 +123,99 @@ export const searchFormSchema: FormSchema[] = [
     //colProps: {span: 6},
   },
   {
-    label: "专业",
-    field: 'majorId',
-    component: 'Input',
+    label: "学院",
+    field: 'collegeName',
+    component: 'ApiSelect',
+    componentProps: {
+      api: () => defHttp.get({ url: '/zbu/tCollege/list', params: { pageSize: 999, pageNo: 1 } }).then(res => {
+        const records = res.records || [];
+        return records.map(item => ({
+          label: item.collegeName,
+          value: item.collegeName
+        }));
+      }),
+      placeholder: '请选择学院'
+    },
     //colProps: {span: 6},
   },
   {
-    label: "学院",
-    field: 'collegeName',
-    component: 'Input',
+    label: "专业",
+    field: 'majorName',
+    component: 'ApiSelect',
+    componentProps: ({ formModel }) => {
+      const collegeName = formModel.collegeName;
+      return {
+        api: () => defHttp.get({ url: '/zbu/tMajor/list', params: { pageSize: 9999, pageNo: 1 } }).then(res => {
+          const records = res.records || [];
+          if (!collegeName) return records.map(item => ({ label: item.majorName, value: item.majorName }));
+          // 先找到学院
+          return defHttp.get({ url: '/zbu/tCollege/list', params: { pageSize: 999, pageNo: 1, collegeName } }).then(colRes => {
+            const colleges = colRes.records || [];
+            const college = colleges.find(c => c.collegeName === collegeName);
+            const collegeId = college ? college.id : null;
+            return records
+              .filter(item => !collegeId || item.collegeId === collegeId)
+              .map(item => ({ label: item.majorName, value: item.majorName }));
+          });
+        }),
+        placeholder: collegeName ? '请选择专业' : '请先选择学院',
+        disabled: !collegeName,
+        immediate: true
+      };
+    },
+    //colProps: {span: 6},
+  },
+  {
+    label: "班级",
+    field: 'className',
+    component: 'ApiSelect',
+    componentProps: ({ formModel }) => {
+      const majorName = formModel.majorName;
+      return {
+        api: () => defHttp.get({ url: '/zbu/tClass/list', params: { pageSize: 9999, pageNo: 1 } }).then(res => {
+          const records = res.records || [];
+          if (!majorName) return records.map(item => ({ label: item.className, value: item.className }));
+          return defHttp.get({ url: '/zbu/tMajor/list', params: { pageSize: 999, pageNo: 1, majorName } }).then(majRes => {
+            const majors = majRes.records || [];
+            const major = majors.find(m => m.majorName === majorName);
+            const majorId = major ? major.id : null;
+            return records
+              .filter(item => !majorId || item.majorId === majorId)
+              .map(item => ({ label: item.className, value: item.className }));
+          });
+        }),
+        placeholder: majorName ? '请选择班级' : '请先选择专业',
+        disabled: !majorName,
+        immediate: false
+      };
+    },
+    ifShow: ({ values }) => !!values.majorName,
     //colProps: {span: 6},
   },
   {
     label: "征订学年",
     field: 'subscriptionYear',
-    component: 'Input',
+    component: 'JDictSelectTag',
+    componentProps: () => {
+      const now = new Date();
+      const currentYear = now.getFullYear();
+      const currentMonth = now.getMonth() + 1;
+      // 动态生成年份选项（当前年份往前推5年）
+      const options = [];
+      for (let i = -1; i <= 4; i++) {
+        const year = currentYear + (currentMonth < 9 ? i : i + 1);
+        if (year >= 2020) { // 只显示2020年之后的
+          options.push({
+            label: `${year}-${year + 1}`,
+            value: `${year}-${year + 1}`
+          });
+        }
+      }
+      return {
+        options,
+        placeholder: '请选择征订学年'
+      };
+    },
     //colProps: {span: 6},
   },
   {

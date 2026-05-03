@@ -117,12 +117,25 @@ public class StudentBillController extends JeecgController<StudentBill, IStudent
 					continue;
 				}
 
-				// ====================== 1. 关联专业表：获取专业名称 ======================
+				// ====================== 1. 关联专业表：获取专业名称和学院名称 ======================
 				String majorName = "未知专业";
+				String collegeName = "未知学院";
 				try {
 					TMajor tMajor = tMajorService.getById(sub.getMajorId());
 					if (tMajor != null && oConvertUtils.isNotEmpty(tMajor.getMajorName())) {
 						majorName = tMajor.getMajorName();
+						// 同时获取学院名称
+						if (oConvertUtils.isNotEmpty(tMajor.getCollegeId())) {
+							try {
+								String collegeSql = "SELECT college_name FROM t_college WHERE id = ? LIMIT 1";
+								String cn = jdbcTemplate.queryForObject(collegeSql, String.class, tMajor.getCollegeId());
+								if (oConvertUtils.isNotEmpty(cn)) {
+									collegeName = cn;
+								}
+							} catch (Exception e2) {
+								log.warn("征订记录ID:{} 查询学院名称失败", sub.getId());
+							}
+						}
 					}
 				} catch (Exception e) {
 					log.warn("征订记录ID:{} 查询专业名称失败（majorId={}）", sub.getId(), sub.getMajorId(), e);
@@ -188,6 +201,7 @@ public class StudentBillController extends JeecgController<StudentBill, IStudent
 				bill.setStudentId(studentNo);
 
 				bill.setMajorName(majorName); // 专业名称（专业表，保持历史专业信息）
+				bill.setCollegeName(collegeName); // 学院名称
 				bill.setSubscriptionYear(sub.getSubscriptionYear()); // 征订学年（征订表）
 				bill.setSubscriptionSemester(sub.getSubscriptionSemester()); // 征订学期（征订表）
 				bill.setTextbookName(textbookName); // 教材名称（教材表）
@@ -250,6 +264,7 @@ public class StudentBillController extends JeecgController<StudentBill, IStudent
 			@RequestParam(name = "studentName", required = false) String studentName,
 			@RequestParam(name = "collegeName", required = false) String collegeName,
 			@RequestParam(name = "majorName", required = false) String majorName,
+			@RequestParam(name = "className", required = false) String className,
 			@RequestParam(name = "schoolYear", required = false) String schoolYear,
 			@RequestParam(name = "semester", required = false) String semester,
 			@RequestParam(name = "pageNo", defaultValue = "1") Integer pageNo,
@@ -294,6 +309,10 @@ public class StudentBillController extends JeecgController<StudentBill, IStudent
 		if (oConvertUtils.isNotEmpty(majorName)) {
 			baseSql += " AND majorName LIKE '%" + majorName + "%'";
 			countSql += " AND majorName LIKE '%" + majorName + "%'";
+		}
+		if (oConvertUtils.isNotEmpty(className)) {
+			baseSql += " AND className LIKE '%" + className + "%'";
+			countSql += " AND className LIKE '%" + className + "%'";
 		}
 		if (oConvertUtils.isNotEmpty(schoolYear)) {
 			baseSql += " AND schoolYear = '" + schoolYear + "'";
@@ -348,7 +367,7 @@ public class StudentBillController extends JeecgController<StudentBill, IStudent
 	 * @param request
 	 * @param studentNo
 	 * @param studentName
-	 * @param className
+//	 * @param className
 	 * @param majorName
 	 * @param schoolYear
 	 * @param semester
@@ -580,6 +599,7 @@ public class StudentBillController extends JeecgController<StudentBill, IStudent
 			recordMap.put("studentId", bill.getStudentId());
 			recordMap.put("studentNo", bill.getStudentId());
 			recordMap.put("className", bill.getClassName());
+			recordMap.put("collegeName", bill.getCollegeName());
 			recordMap.put("majorName", bill.getMajorName());
 			recordMap.put("subscriptionYear", bill.getSubscriptionYear());
 			recordMap.put("subscriptionSemester", bill.getSubscriptionSemester());
@@ -621,19 +641,28 @@ public class StudentBillController extends JeecgController<StudentBill, IStudent
 			}
 			recordMap.put("isbn", isbn != null ? isbn : "");
 
-			// 查询班级名称
+			// 查询班级名称和学院名称
 			String studentIdForClass = bill.getStudentId();
 			if (studentIdForClass != null && !studentIdForClass.isEmpty()) {
 				try {
-					String classNameSql = "SELECT c.class_name FROM t_class c INNER JOIN t_student s ON s.class_id = c.id WHERE s.student_id = ? LIMIT 1";
-					String classNameResult = jdbcTemplate.queryForObject(classNameSql, String.class, studentIdForClass);
-					recordMap.put("className", classNameResult != null ? classNameResult : "");
+					String classCollegeSql = "SELECT c.class_name, cl.college_name FROM t_class c INNER JOIN t_student s ON s.class_id = c.id LEFT JOIN t_major m ON c.major_id = m.id LEFT JOIN t_college cl ON m.college_id = cl.id WHERE s.student_id = ? LIMIT 1";
+					List<Map<String, Object>> classCollegeList = jdbcTemplate.queryForList(classCollegeSql, studentIdForClass);
+					if (!classCollegeList.isEmpty()) {
+						Map<String, Object> cc = classCollegeList.get(0);
+						recordMap.put("className", cc.get("class_name") != null ? cc.get("class_name").toString() : "");
+						recordMap.put("collegeName", cc.get("college_name") != null ? cc.get("college_name").toString() : "");
+					} else {
+						recordMap.put("className", "");
+						recordMap.put("collegeName", "");
+					}
 				} catch (Exception e) {
-					log.warn("查询班级名称失败：{}", e.getMessage());
+					log.warn("查询班级/学院名称失败：{}", e.getMessage());
 					recordMap.put("className", "");
+					recordMap.put("collegeName", "");
 				}
 			} else {
 				recordMap.put("className", "");
+				recordMap.put("collegeName", "");
 			}
 
 			recordsWithIsbn.add(recordMap);

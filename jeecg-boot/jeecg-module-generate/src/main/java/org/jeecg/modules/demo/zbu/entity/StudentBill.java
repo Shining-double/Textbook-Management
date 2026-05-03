@@ -52,6 +52,10 @@ public class StudentBill implements Serializable {
 	@TableField(exist = false)
 	@Schema(description = "班级")
 	private java.lang.String className;
+	/** 学院（仅搜索用） */
+	@TableField(exist = false)
+	@Schema(description = "学院")
+	private java.lang.String collegeName;
 	/** 专业 */
 	@Excel(name = "专业", width = 15, dictTable = "t_major", dicCode = "id", dicText = "major_name")
 	@Dict(dictTable = "t_major", dicCode = "id", dicText = "major_name")

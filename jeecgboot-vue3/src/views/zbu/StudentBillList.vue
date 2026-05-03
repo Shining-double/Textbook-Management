@@ -3,7 +3,9 @@
     <div class="bill-table-container">
       <BasicTable
         @register="registerTable"
-        :rowSelection="rowSelection"
+        :rowSelection="billRowSelection"
+        :form-config="tableFormConfig"
+        :class="{ 'hide-search-form': !isAdmin && !isCounselor }"
         :pagination="{
           pageSize: 10,
           showSizeChanger: true,
@@ -12,9 +14,6 @@
         }"
       >
         <template #tableTitle>
-          <div class="search-btn-container" v-if="isStudent">
-            <super-query :config="superQueryConfig" @search="handleSuperQuery" />
-          </div>
           <template v-if="isAdmin">
             <a-button type="primary" v-auth="'zbu:student_bill:add'" @click="handleAdd" preIcon="ant-design:plus-outlined"> 新增</a-button>
             <a-button type="primary" v-auth="'zbu:student_bill:sync'" @click="handleSync" preIcon="ant-design:sync-outlined" style="margin-left: 8px;"> 同步征订数据</a-button>
@@ -39,7 +38,7 @@
 
         <template v-slot:bodyCell="{ column, record, text }">
           <template v-if="column.dataIndex === 'studentNo'">
-            {{ record?.isSummary ? '合计' : (record?.studentNo || '未知学号') }}
+            <span :class="{ 'is-summary-cell': record?.isSummary }">{{ record?.isSummary ? '总计教材费用' : (record?.studentNo || '未知学号') }}</span>
           </template>
           <template v-if="column.dataIndex === 'studentName'">
             {{ record?.isSummary ? '' : (record?.studentName || '未知姓名') }}
@@ -51,18 +50,16 @@
             {{ record?.isSummary ? '' : (record?.majorName || '未知专业') }}
           </template>
           <template v-if="column.dataIndex === 'discountPrice'">
-            {{ record?.isSummary
-            ? `¥${record?.discountPrice?.toFixed(2) || '0.00'}`
-            : `¥${(record?.discountPrice || 0).toFixed(2)}`
-            }}
+            {{ record?.isSummary ? `¥${(record?.discountPrice || 0).toFixed(2)}` : `¥${(record?.discountPrice || 0).toFixed(2)}` }}
+          </template>
+          <template v-if="column.dataIndex === 'subscribeStatus'">
+            {{ record?.isSummary ? '' : text }}
+          </template>
+          <template v-if="column.dataIndex === 'receiveStatus'">
+            {{ record?.isSummary ? '' : text }}
           </template>
         </template>
       </BasicTable>
-
-      <div class="bill-summary-row" v-if="isAdmin && tableData.length > 0">
-        <div class="summary-label">合计：</div>
-        <div class="summary-value">¥{{ totalDiscountPrice.toFixed(2) }}</div>
-      </div>
     </div>
 
     <StudentBillModal
@@ -98,15 +95,34 @@ const { createMessage } = useMessage();
 
 const [registerModal, {openModal}] = useModal();
 
-const isAdmin = computed(() => {
+const userRoleType = computed(() => {
   const userInfo = userStore.getUserInfo || {};
-  const username = (userInfo.username || '').toLowerCase().trim();
-  return ['admin', 'sysadmin'].includes(username);
+  const roleCode = (userInfo.roleCode || "").toLowerCase().trim();
+  const username = (userInfo.username || "").toLowerCase().trim();
+
+  if (['admin', 'sysadmin'].includes(username) || roleCode.includes('admin')) {
+    return 'admin';
+  }
+  if (roleCode.includes('counselor') || roleCode.includes('daoyuan')) {
+    return 'counselor';
+  }
+  return 'student';
 });
 
-const isStudent = computed(() => {
-  return !unref(isAdmin);
-});
+const isAdmin = computed(() => unref(userRoleType) === 'admin');
+const isCounselor = computed(() => unref(userRoleType) === 'counselor');
+const isStudent = computed(() => unref(userRoleType) === 'student');
+
+const tableFormConfig = computed(() => ({
+  schemas: unref(isAdmin) || unref(isCounselor) ? searchFormSchema : [],
+  show: unref(isAdmin) || unref(isCounselor),
+  showAdvancedButton: unref(isAdmin) || unref(isCounselor),
+  showSearchButton: unref(isAdmin) || unref(isCounselor),
+  showResetButton: unref(isAdmin) || unref(isCounselor),
+  autoSubmitOnEnter: true,
+  submitButtonProps: { label: '查询' },
+  resetButtonProps: { label: '重置' }
+}));
 
 const studentSearchSchema = computed(() => [
   {
@@ -158,7 +174,10 @@ const fetchBillList = async (params = {}) => {
     }
 
     const res = await list(requestParams);
+    console.log('【账单列表】后端返回原始数据：', JSON.stringify(res).substring(0, 500));
+    console.log('【账单列表】当前页码/每页条数：', requestParams.pageNo, requestParams.pageSize);
     const rawRecords = res.records || [];
+    console.log('【账单列表】原始记录数量：', rawRecords.length);
     const formattedRecords: Recordable[] = [];
 
     for (const item of rawRecords) {
@@ -169,7 +188,7 @@ const fetchBillList = async (params = {}) => {
 
       formattedRecords.push({
         ...item,
-        id: item.id || `bill-${Math.random().toString(36).slice(2, 10)}`,
+        id: item.id || `${item.studentId || ''}-${item.textbookName || ''}-${item.subscriptionYear || ''}`,
         studentId: item.student_id || item.studentId,
         subscriptionId: item.subscription_id || item.subscriptionId,
         textbookId: item.textbook_id || item.textbookId,
@@ -180,6 +199,8 @@ const fetchBillList = async (params = {}) => {
         majorName,
         textbookName,
         isbn: item.isbn || '',
+        collegeName: item.collegeName || item.college_name || '',
+        className: item.className || item.class_name || '',
         subscriptionYear: item.subscriptionYear || item.subscription_year,
         subscriptionSemester: item.subscriptionSemester || item.subscription_semester,
         subscribeStatus: item.subscribeStatus || item.subscribe_status,
@@ -204,29 +225,101 @@ const fetchBillList = async (params = {}) => {
         finalRecords = finalRecords.filter(item => (item.textbookName || '').toLowerCase().includes(textbook));
       }
     }
+    // 管理员筛选：学院/专业/班级（直接字段匹配）
+    if (unref(isAdmin)) {
+      if (requestParams.collegeName) {
+        const searchKey = requestParams.collegeName.trim().toLowerCase();
+        finalRecords = finalRecords.filter(item =>
+          (item.collegeName || '').toLowerCase().includes(searchKey)
+        );
+      }
+      if (requestParams.majorName) {
+        const searchKey = requestParams.majorName.trim().toLowerCase();
+        finalRecords = finalRecords.filter(item =>
+          (item.majorName || '').toLowerCase().includes(searchKey)
+        );
+      }
+      if (requestParams.className) {
+        const searchKey = requestParams.className.trim().toLowerCase();
+        finalRecords = finalRecords.filter(item =>
+          (item.className || '').toLowerCase().includes(searchKey)
+        );
+      }
+    }
 
     totalDiscountPrice.value = finalRecords.reduce((sum, item) => {
       return sum + (Number(item.discountPrice) || 0);
     }, 0);
 
-    // ========== 关键修改：管理员/学生端都添加表格内汇总行 ==========
-    if (finalRecords.length > 0) {
-      const summaryRecord: Recordable = {
+    const originalTotal = res.total || 0;
+
+    // 管理员模式：最后一行加总计
+    if (unref(isAdmin) && originalTotal > 0) {
+      // 额外请求全量数据，计算筛选后的真实总数和总计金额
+      let allTotalPrice = 0;
+      let filteredTotal = originalTotal;
+      try {
+        const allRes = await list({ ...requestParams, pageSize: 99999, pageNo: 1 });
+        const allRaw = allRes.records || [];
+        let allFiltered = [...allRaw];
+        if (requestParams.collegeName) {
+          const key = requestParams.collegeName.trim().toLowerCase();
+          allFiltered = allFiltered.filter(item => (item.collegeName || item.college_name || '').toLowerCase().includes(key));
+        }
+        if (requestParams.majorName) {
+          const key = requestParams.majorName.trim().toLowerCase();
+          allFiltered = allFiltered.filter(item => (item.majorName || item.major_name || '').toLowerCase().includes(key));
+        }
+        if (requestParams.className) {
+          const key = requestParams.className.trim().toLowerCase();
+          allFiltered = allFiltered.filter(item => (item.className || item.class_name || '').toLowerCase().includes(key));
+        }
+        filteredTotal = allFiltered.length;
+        allTotalPrice = allFiltered.reduce((sum, item) => sum + (Number(item.discountPrice) || 0), 0);
+      } catch (e) {
+        allTotalPrice = totalDiscountPrice.value;
+      }
+      totalDiscountPrice.value = allTotalPrice;
+
+      const pageSize = requestParams.pageSize || 10;
+      const pageNo = requestParams.pageNo || 1;
+      const lastDataPage = Math.ceil(filteredTotal / pageSize) || 1;
+      const isLastDataPage = pageNo === lastDataPage;
+      const isExtraPage = pageNo > lastDataPage;
+
+      const summaryRow = {
         id: 'summary-row',
         isSummary: true,
-        studentNo: '合计',
+        studentNo: '总计教材费用',
         studentName: '',
         majorName: '',
-        textbookName: '',
-        discountPrice: totalDiscountPrice.value,
+        className: '',
         subscriptionYear: '',
         subscriptionSemester: '',
+        textbookName: '',
+        isbn: '',
+        price: '',
+        discountPrice: allTotalPrice,
+        subscribeStatus: '',
+        receiveStatus: '',
+        remark: '',
       };
-      finalRecords.push(summaryRecord);
+
+      if (isExtraPage) {
+        // 总计单独一页
+        finalRecords = [summaryRow];
+      } else if (isLastDataPage && finalRecords.length < pageSize) {
+        // 最后一页没满，直接追加总计行
+        finalRecords.push(summaryRow);
+      }
+      // 如果最后一页满了，总计会自动出现在下一页（isExtraPage时显示）
+
+      tableData.value = finalRecords;
+      return { records: finalRecords, total: filteredTotal + 1 };
     }
 
     tableData.value = finalRecords;
-    return { records: finalRecords, total: res.total || finalRecords.length };
+    return { records: finalRecords, total: originalTotal };
   } catch (e) {
     console.error("【获取账单列表失败】", e);
     createMessage.error("获取账单记录失败，请刷新重试");
@@ -244,13 +337,13 @@ const { tableContext, onExportXls, onImportXls } = useListPage({
     canResize:true,
     showActionColumn: false,
     formConfig: {
-      schemas: unref(isAdmin) ? searchFormSchema : unref(studentSearchSchema),
+      schemas: searchFormSchema,
       autoSubmitOnEnter: true,
-      showAdvancedButton: unref(isAdmin),
+      showAdvancedButton: true,
       fieldMapToNumber: [],
       fieldMapToTime: [],
-      show: unref(isAdmin) || unref(isStudent),
     },
+    useSearchForm: unref(isAdmin) || unref(isCounselor),
     beforeFetch: (params) => {
       if (params && fieldPickers) {
         for (let key in fieldPickers) {
@@ -276,6 +369,13 @@ const { tableContext, onExportXls, onImportXls } = useListPage({
 });
 
 const [registerTable, {reload}, { rowSelection, selectedRowKeys }] = tableContext;
+
+const billRowSelection = computed(() => {
+  if (unref(isStudent)) {
+    return undefined;
+  }
+  return rowSelection;
+});
 
 const superQueryConfig = reactive(superQuerySchema);
 
@@ -471,7 +571,7 @@ function getDropDownAction(record) {
   }
 }
 
-:deep(.ant-table-tbody tr:last-child) {
+:deep(.ant-table-tbody tr:has(td .is-summary-cell)) {
   font-weight: bold;
   background-color: #fafafa;
   border-top: 2px solid #f0f0f0;
@@ -480,5 +580,9 @@ function getDropDownAction(record) {
 :deep(.ant-table-pagination) {
   margin: 16px !important;
   text-align: right;
+}
+
+.hide-search-form :deep(.ant-table-form-container) {
+  display: none !important;
 }
 </style>

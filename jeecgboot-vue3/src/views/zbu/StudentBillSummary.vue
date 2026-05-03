@@ -29,11 +29,11 @@
 
       <template v-slot:bodyCell="{ column, record, text }">
         <template v-if="column.dataIndex === 'studentId'">
-          {{ record?.isSummary ? '合计' : (record?.studentId || '') }}
+          <span :class="{ 'is-summary-cell': record?.isSummary }">{{ record?.isSummary ? '总计教材费用' : (record?.studentId || '') }}</span>
         </template>
         <template v-if="column.dataIndex === 'totalDiscountPrice'">
           {{ record?.isSummary
-          ? `¥${record?.totalDiscountPrice?.toFixed(2) || '0.00'}`
+          ? `¥${(record?.totalDiscountPrice || 0).toFixed(2)}`
           : `¥${(record?.totalDiscountPrice || 0).toFixed(2)}`
           }}
         </template>
@@ -46,11 +46,6 @@
         />
       </template>
     </BasicTable>
-
-    <div class="bill-summary-row" v-if="tableData.length > 0">
-      <div class="summary-label">合计：</div>
-      <div class="summary-value">¥{{ totalDiscountPrice.toFixed(2) }}</div>
-    </div>
   </div>
 </template>
 
@@ -99,6 +94,7 @@ const {prefix, tableContext, onExportXls} = useListPage({
         studentName: params.studentName || '',
         collegeName: params.collegeName || '',
         majorName: params.majorName || '',
+        className: params.className || '',
         schoolYear: params.schoolYear || '',
         semester: params.semester || '',
       };
@@ -112,24 +108,64 @@ const {prefix, tableContext, onExportXls} = useListPage({
           };
         });
 
-        totalDiscountPrice.value = formattedRecords.reduce((sum, item) => {
-          return sum + (Number(item.totalDiscountPrice) || 0);
-        }, 0);
+        const originalTotal = res.total || 0;
+        const pageSize = params.pageSize || 10;
+        const pageNo = params.pageNo || 1;
+        const lastDataPage = Math.ceil(originalTotal / pageSize) || 1;
+        const isLastDataPage = pageNo === lastDataPage;
+        const isExtraPage = pageNo > lastDataPage;
 
-        if (formattedRecords.length > 0) {
-          const summaryRecord: Recordable = {
-            id: 'summary-row-total',
-            isSummary: true,
-            studentId: '合计',
-            totalDiscountPrice: totalDiscountPrice.value,
-          };
-          formattedRecords.push(summaryRecord);
+        // 计算总计金额：需要全量数据，不能只看当前页
+        let allTotalPrice = 0;
+        if (isExtraPage) {
+          // 总计单独一页时，当前页没有数据，需要额外请求全量数据计算金额
+          try {
+            const allRes = await summaryList({ ...queryParams, pageSize: 99999, pageNo: 1 });
+            const allRecords = allRes.records || [];
+            allTotalPrice = allRecords.reduce((sum, item) => sum + (Number(item.totalDiscountPrice) || 0), 0);
+          } catch (e) {
+            allTotalPrice = 0;
+          }
+        } else {
+          // 当前页有数据时，还需要加上前面页的金额
+          if (pageNo > 1) {
+            try {
+              const prevRes = await summaryList({ ...queryParams, pageSize: 99999, pageNo: 1 });
+              const prevRecords = prevRes.records || [];
+              allTotalPrice = prevRecords.reduce((sum, item) => sum + (Number(item.totalDiscountPrice) || 0), 0);
+            } catch (e) {
+              allTotalPrice = formattedRecords.reduce((sum, item) => sum + (Number(item.totalDiscountPrice) || 0), 0);
+            }
+          } else {
+            allTotalPrice = formattedRecords.reduce((sum, item) => sum + (Number(item.totalDiscountPrice) || 0), 0);
+          }
+        }
+        totalDiscountPrice.value = allTotalPrice;
+
+        const summaryRow = {
+          id: 'summary-row-total',
+          isSummary: true,
+          studentId: '总计教材费用',
+          studentName: '',
+          collegeName: '',
+          majorName: '',
+          className: '',
+          schoolYear: '',
+          semester: '',
+          totalDiscountPrice: allTotalPrice,
+        };
+
+        if (isExtraPage) {
+          formattedRecords.length = 0;
+          formattedRecords.push(summaryRow);
+        } else if (isLastDataPage && formattedRecords.length < pageSize) {
+          formattedRecords.push(summaryRow);
         }
 
         tableData.value = formattedRecords;
         return {
           records: formattedRecords,
-          total: res.total || 0,
+          total: originalTotal + 1,
         };
       }
       return {records: [], total: 0};
@@ -204,5 +240,10 @@ watch(() => searchParams, () => {
 <style scoped>
 .bill-table-container {
   padding: 16px;
+}
+:deep(.ant-table-tbody tr:has(td .is-summary-cell)) {
+  font-weight: bold;
+  background-color: #fafafa;
+  border-top: 2px solid #f0f0f0;
 }
 </style>
