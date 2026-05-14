@@ -199,18 +199,23 @@ export const searchFormSchema: FormSchema[] = [
     componentProps: () => {
       const now = new Date();
       const currentYear = now.getFullYear();
-      const currentMonth = now.getMonth() + 1;
-      // 动态生成年份选项（当前年份往前推5年）
+      const currentMonth = now.getMonth() + 1; // 1-12
+
+      // 9月之前（1-8月）：最新一届是去年；9月之后（9-12月）：最新一届是本年
+      const latestGradeYear = currentMonth < 9 ? currentYear - 1 : currentYear;
+
+      // 生成4个选项：从最新一届往前推4年（包括最新一届，用于查看）
       const options = [];
-      for (let i = -1; i <= 4; i++) {
-        const year = currentYear + (currentMonth < 9 ? i : i + 1);
-        if (year >= 2020) { // 只显示2020年之后的
+      for (let i = 0; i <= 3; i++) {
+        const year = latestGradeYear - i;
+        if (year >= 2020) { // 只显示2020年及之后的
           options.push({
             label: `${year}-${year + 1}`,
             value: `${year}-${year + 1}`
           });
         }
       }
+
       return {
         options,
         placeholder: '请选择征订学年'

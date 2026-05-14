@@ -96,7 +96,7 @@ import {columns, searchFormSchema, superQuerySchema} from './TSubscription.data'
 import {
   deleteOne, batchDelete, getImportUrl, getExportUrl, getMySubscription,
   getStudentById, getTextbookById, getMajorById, getCollegeById, batchUpdateSubscribeStatus,
-  getStudentByNo
+  getStudentByNo, getCurrentSchoolYear
 } from './TSubscription.api';
 import { downloadFile } from '/jeecgboot-vue3/src/utils/common/renderUtils';
 import { useUserStore } from '/@/store/modules/user';
@@ -182,8 +182,21 @@ const fetchTableData = async (params = {}) => {
     const roleType = unref(userRoleType);
     console.log(`【${roleType}端】开始获取数据，参数：`, params);
 
+    // 如果没有传学年参数，自动获取当前学年作为默认筛选
+    let finalParams = { ...params };
+    if (!finalParams.subscriptionYear) {
+      try {
+        const yearRes = await getCurrentSchoolYear();
+        if (yearRes && yearRes.currentSchoolYear) {
+          finalParams.subscriptionYear = yearRes.currentSchoolYear;
+        }
+      } catch (e) {
+        console.warn('获取当前学年失败', e);
+      }
+    }
+
     // 1. 调用后端接口获取对应角色的全量数据（使用视图）
-    const res = await getMySubscription(params);
+    const res = await getMySubscription(finalParams);
     const rawRecords = res?.success ? res.result : (Array.isArray(res) ? res : []);
 
     if (rawRecords.length === 0) {
@@ -249,13 +262,13 @@ const fetchTableData = async (params = {}) => {
       key: item.id || Math.random().toString(36).substr(2, 9)
     }));
 
-    // 4. 仅管理员/辅导员执行前端筛选
+    // 4. 仅管理员/辅导员执行前端筛选（注意：后端已经按学年筛选了，这里只是额外的前端筛选）
     let filteredRecords = [...formattedRecords];
-    if ((unref(isAdmin) || unref(isCounselor)) && Object.keys(params).length > 0) {
+    if ((unref(isAdmin) || unref(isCounselor)) && Object.keys(finalParams).length > 0) {
       // 班级筛选：通过班级名查找学生ID，再按学生ID过滤
-      if (params.className) {
+      if (finalParams.className) {
         try {
-          const className = params.className.trim();
+          const className = finalParams.className.trim();
           // 1. 查找班级获取classId
           const classRes = await defHttp.get({ url: '/zbu/tClass/list', params: { pageSize: 999, pageNo: 1, className } });
           const classRecords = classRes.records || [];
@@ -278,22 +291,22 @@ const fetchTableData = async (params = {}) => {
           console.error('班级筛选失败：', e);
         }
       }
-      if (params.studentId) {
-        const searchKey = params.studentId.trim().toLowerCase();
+      if (finalParams.studentId) {
+        const searchKey = finalParams.studentId.trim().toLowerCase();
         filteredRecords = filteredRecords.filter(item =>
           (item.studentNo || '').toLowerCase().includes(searchKey) ||
           (item.studentName || '').toLowerCase().includes(searchKey)
         );
       }
-      if (params.majorName) {
-        const searchKey = params.majorName.trim().toLowerCase();
+      if (finalParams.majorName) {
+        const searchKey = finalParams.majorName.trim().toLowerCase();
         filteredRecords = filteredRecords.filter(item =>
           (item.majorName || '').toLowerCase().includes(searchKey)
         );
       }
-      if (params.subscriptionYear) {
+      if (finalParams.subscriptionYear) {
         filteredRecords = filteredRecords.filter(item =>
-          (item.subscriptionYear || '').toLowerCase().includes(params.subscriptionYear.trim().toLowerCase())
+          (item.subscriptionYear || '').toLowerCase().includes(finalParams.subscriptionYear.trim().toLowerCase())
         );
       }
       if (params.subscriptionSemester) {
@@ -395,7 +408,16 @@ const { prefixCls, tableContext, onExportXls, onImportXls } = useListPage({
           }
         }
       }
-      return Object.assign(params, queryParam);
+      // 合并参数：先使用表单参数，再合并 queryParam（queryParam 优先）
+      const mergedParams = Object.assign({}, params, queryParam);
+      // 过滤掉空字符串和 undefined 的参数
+      Object.keys(mergedParams).forEach(key => {
+        if (mergedParams[key] === '' || mergedParams[key] === undefined) {
+          delete mergedParams[key];
+        }
+      });
+      console.log('【beforeFetch】合并后的参数:', mergedParams);
+      return mergedParams;
     },
   },
   exportConfig: {
@@ -540,22 +562,18 @@ function getDropDownAction(record) {
   }
 }
 
-// ========== 优化：简化onMounted，减少等待时间并增强排查日志 ==========
+// ========== onMounted ==========
 onMounted(async () => {
-  // 等待用户信息加载完成（最多1秒，避免长时间阻塞）
+  // 等待用户信息加载完成（最多1秒）
   let waitCount = 0;
   while (!userStore.getUserInfo?.roleCode && waitCount < 10) {
     await new Promise(resolve => setTimeout(resolve, 100));
     waitCount++;
   }
 
-  // 打印最终角色信息（排查用，上线后可删除）
-  console.log('【完整用户信息】', userStore.getUserInfo);
-  console.log('【用户名】', userStore.getUserInfo?.username);
-  console.log('【角色码原始值】', userStore.getUserInfo?.roleCode);
-  console.log('【最终识别角色类型】', unref(userRoleType));
+  console.log('【用户角色】', unref(userRoleType));
 
-  // 立即刷新表格
+  // 刷新表格（fetchTableData会自动带上当前学年参数）
   reload();
 });
 </script>

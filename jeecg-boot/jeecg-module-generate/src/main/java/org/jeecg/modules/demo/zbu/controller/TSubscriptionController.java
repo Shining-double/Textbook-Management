@@ -380,7 +380,12 @@ public class TSubscriptionController extends JeecgController<TSubscription, ITSu
 	@AutoLog(value = "征订表-获取我的征订记录")
 	@Operation(summary = "获取当前登录学生的征订记录", description = "仅返回当前登录学生本人的征订记录")
 	@GetMapping(value = "/getMySubscription")
-	public Result<List<Map<String, Object>>> getMySubscription() {
+	public Result<List<Map<String, Object>>> getMySubscription(
+			@RequestParam(name = "subscriptionYear", required = false) String subscriptionYear,
+			@RequestParam(name = "subscriptionSemester", required = false) String subscriptionSemester,
+			@RequestParam(name = "className", required = false) String className,
+			@RequestParam(name = "majorName", required = false) String majorName,
+			@RequestParam(name = "studentId", required = false) String studentId) {
 		try {
 			// 1. 获取当前登录用户（LoginUser）
 			Subject subject = SecurityUtils.getSubject();
@@ -419,11 +424,27 @@ public class TSubscriptionController extends JeecgController<TSubscription, ITSu
 				isAdmin = true;
 			}
 
+			// 3. 构建WHERE条件（注意：视图中的列名是驼峰格式）
+			List<String> whereConditions = new ArrayList<>();
+
+			// 征订学年筛选
+			if (oConvertUtils.isNotEmpty(subscriptionYear)) {
+				whereConditions.add("subscriptionYear = '" + subscriptionYear + "'");
+			}
+
+			// 征订学期筛选
+			if (oConvertUtils.isNotEmpty(subscriptionSemester)) {
+				whereConditions.add("subscriptionSemester = '" + subscriptionSemester + "'");
+			}
+
+			String whereClause = whereConditions.isEmpty() ? "" : " WHERE " + String.join(" AND ", whereConditions);
+
 			List<Map<String, Object>> subList = new ArrayList<>();
 			if (isAdmin) {
 				// 管理员：查询所有征订记录（使用视图）
 				subList = jdbcTemplate
-						.queryForList("SELECT * FROM v_subscription_with_details ORDER BY createTime DESC");
+						.queryForList("SELECT * FROM v_subscription_with_details" + whereClause
+								+ " ORDER BY createTime DESC");
 				log.info("管理员模式，查询到{}条征订记录", subList.size());
 			} else if (isCounselor) {
 				// 步骤1：通过sys_user.id查询辅导员信息
@@ -461,7 +482,8 @@ public class TSubscriptionController extends JeecgController<TSubscription, ITSu
 				String studentIdInClause = String.join(",",
 						studentIds.stream().map(id -> "'" + id + "'").collect(Collectors.toList()));
 				subList = jdbcTemplate.queryForList("SELECT * FROM v_subscription_with_details WHERE student_id IN ("
-						+ studentIdInClause + ") ORDER BY createTime DESC");
+						+ studentIdInClause + ")" + (whereClause.isEmpty() ? "" : whereClause)
+						+ " ORDER BY createTime DESC");
 				log.info("辅导员{}模式，查询到管理班级下{}条征订记录", counselor.getCounselorName(), subList.size());
 			} else {
 				// 学生逻辑（保持原有不变）
@@ -481,9 +503,23 @@ public class TSubscriptionController extends JeecgController<TSubscription, ITSu
 				}
 
 				// 查询该学生的征订记录（使用视图）
-				subList = jdbcTemplate.queryForList(
-						"SELECT * FROM v_subscription_with_details WHERE student_id = ? ORDER BY subscribeTime DESC",
-						student.getId());
+				StringBuilder studentSql = new StringBuilder(
+						"SELECT * FROM v_subscription_with_details WHERE student_id = ?");
+				List<Object> params = new ArrayList<>();
+				params.add(student.getId());
+
+				if (oConvertUtils.isNotEmpty(subscriptionYear)) {
+					studentSql.append(" AND subscriptionYear = ?");
+					params.add(subscriptionYear);
+				}
+				if (oConvertUtils.isNotEmpty(subscriptionSemester)) {
+					studentSql.append(" AND subscriptionSemester = ?");
+					params.add(subscriptionSemester);
+				}
+				studentSql.append(" ORDER BY subscribeTime DESC");
+
+				Object[] paramArray = params.toArray();
+				subList = jdbcTemplate.queryForList(studentSql.toString(), paramArray);
 				log.info("学生模式，查询到{}条征订记录", subList.size());
 			}
 

@@ -75,13 +75,33 @@ public class TTextbookController extends JeecgController<TTextbook, ITTextbookSe
 												  @RequestParam(name = "pageSize", defaultValue = "10") Integer pageSize,
 												  HttpServletRequest req) {
 
-		// 自定义查询规则
-		Map<String, QueryRuleEnum> customeRuleMap = new HashMap<>();
-		// 自定义多选的查询规则为：LIKE_WITH_OR
-		customeRuleMap.put("enableSemester", QueryRuleEnum.LIKE_WITH_OR);
-		customeRuleMap.put("status", QueryRuleEnum.LIKE_WITH_OR);
-		QueryWrapper<TTextbook> queryWrapper = QueryGenerator.initQueryWrapper(tTextbook, req.getParameterMap(),
-				customeRuleMap);
+		QueryWrapper<TTextbook> queryWrapper = new QueryWrapper<>();
+
+		// 启用学年筛选（必须）：没传则自动使用当前学年
+		String enableYear = req.getParameter("enableYear");
+		if (oConvertUtils.isEmpty(enableYear)) {
+			Calendar cal = Calendar.getInstance();
+			int year = cal.get(Calendar.YEAR);
+			int month = cal.get(Calendar.MONTH) + 1;
+			if (month >= 8) {
+				enableYear = year + "-" + (year + 1);
+			} else {
+				enableYear = (year - 1) + "-" + year;
+			}
+		}
+		queryWrapper.eq("enable_year", enableYear);
+
+		// 其他可选条件
+		if (oConvertUtils.isNotEmpty(tTextbook.getIsbn())) {
+			queryWrapper.like("isbn", tTextbook.getIsbn());
+		}
+		if (oConvertUtils.isNotEmpty(tTextbook.getTextbookName())) {
+			queryWrapper.like("textbook_name", tTextbook.getTextbookName());
+		}
+
+		queryWrapper.orderByDesc("create_time");
+		log.info("教材表查询 - 启用学年: {}", enableYear);
+
 		Page<TTextbook> page = new Page<TTextbook>(pageNo, pageSize);
 		IPage<TTextbook> pageList = tTextbookService.page(page, queryWrapper);
 		return Result.OK(pageList);
@@ -149,7 +169,7 @@ public class TTextbookController extends JeecgController<TTextbook, ITTextbookSe
 	}
 
 	/**
-	 *  批量删除
+	 * 批量删除
 	 *
 	 * @param ids
 	 * @return

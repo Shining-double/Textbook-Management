@@ -18,6 +18,7 @@ enum Api {
   getMajorById = '/zbu/tMajor/queryById',       // 查专业
   getCollegeById = '/zbu/tCollege/queryById',   // 查学院
   batchUpdateSubscribeStatus = '/zbu/tSubscription/batchUpdateSubscribeStatus',
+  getCurrentSchoolYear = '/zbu/studentBill/getCurrentSchoolYear', // 获取当前学年
 }
 /**
  * 导出api
@@ -108,5 +109,10 @@ export const getStudentByNo = (studentNo: string) =>
 // 根据学院ID查学院信息
 export const getCollegeById = (collegeId) =>
   defHttp.get({ url: Api.getCollegeById, params: { id: collegeId } });
+
+// 获取当前学年
+export const getCurrentSchoolYear = () => {
+  return defHttp.get({ url: Api.getCurrentSchoolYear });
+};
 
 

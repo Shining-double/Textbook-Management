@@ -98,7 +98,7 @@ import { useModal } from '/@/components/Modal';
 import { useListPage } from '/@/hooks/system/useListPage'
 import TTextbookModal from './components/TTextbookModal.vue'
 import { columns, searchFormSchema, superQuerySchema } from './TTextbook.data';
-import { list, deleteOne, batchDelete, getImportUrl, getExportUrl, batchEdit, getAllIds } from './TTextbook.api';
+import { list, deleteOne, batchDelete, getImportUrl, getExportUrl, batchEdit, getAllIds, getCurrentSchoolYear } from './TTextbook.api';
 import { useMessage } from '/@/hooks/web/useMessage';
 import { getDateByPicker } from '/@/utils';
 
@@ -138,7 +138,7 @@ const { tableContext, onExportXls, onImportXls } = useListPage({
       width: 120,
       fixed: 'right'
     },
-    beforeFetch: (params) => {
+    beforeFetch: async (params) => {
       if (params && fieldPickers) {
         for (let key in fieldPickers) {
           if (params[key]) {
@@ -146,7 +146,22 @@ const { tableContext, onExportXls, onImportXls } = useListPage({
           }
         }
       }
-      return Object.assign(params, queryParam);
+
+      const merged = Object.assign({}, params, queryParam);
+
+      // 如果没有传启用学年参数，调用接口获取当前学年
+      if (!merged.enableYear) {
+        try {
+          const yearRes = await getCurrentSchoolYear();
+          if (yearRes && yearRes.currentSchoolYear) {
+            merged.enableYear = yearRes.currentSchoolYear;
+          }
+        } catch (e) {
+          console.warn('获取当前学年失败', e);
+        }
+      }
+
+      return merged;
     },
   },
   exportConfig: {

@@ -12,6 +12,7 @@ enum Api {
   importExcel = '/zbu/tTextbook/importExcel',
   exportXls = '/zbu/tTextbook/exportXls',
   editBatch = '/zbu/tTextbook/editBatch',
+  getCurrentSchoolYear = '/zbu/studentBill/getCurrentSchoolYear',
 }
 /**
  * 导出api
@@ -80,6 +81,13 @@ export const saveOrUpdate = (params, isUpdate) => {
 export const batchEdit = (params) => {
   // 和征订表接口写法完全一致，简洁且无报错
   return defHttp.post({ url: Api.editBatch, params });
+};
+
+/**
+ * 获取当前学年
+ */
+export const getCurrentSchoolYear = () => {
+  return defHttp.get({ url: Api.getCurrentSchoolYear });
 };
 
 

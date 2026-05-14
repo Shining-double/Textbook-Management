@@ -17,6 +17,7 @@ import org.jeecg.common.system.query.QueryRuleEnum;
 import org.jeecg.common.system.vo.LoginUser;
 import org.jeecg.common.util.oConvertUtils;
 import org.jeecg.modules.demo.zbu.entity.*;
+import org.jeecg.modules.demo.zbu.vo.StudentBillSummaryExport;
 import org.jeecg.modules.demo.zbu.service.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -128,7 +129,8 @@ public class StudentBillController extends JeecgController<StudentBill, IStudent
 						if (oConvertUtils.isNotEmpty(tMajor.getCollegeId())) {
 							try {
 								String collegeSql = "SELECT college_name FROM t_college WHERE id = ? LIMIT 1";
-								String cn = jdbcTemplate.queryForObject(collegeSql, String.class, tMajor.getCollegeId());
+								String cn = jdbcTemplate.queryForObject(collegeSql, String.class,
+										tMajor.getCollegeId());
 								if (oConvertUtils.isNotEmpty(cn)) {
 									collegeName = cn;
 								}
@@ -246,6 +248,32 @@ public class StudentBillController extends JeecgController<StudentBill, IStudent
 			log.error("同步失败", e);
 			return Result.error("同步失败：" + e.getMessage());
 		}
+	}
+
+	/**
+	 * 获取当前学年
+	 * 根据系统时间计算：8-12月为当前学年的第一学期（如2025年9月对应2025-2026学年）
+	 * 1-7月为上一学年的第二学期（如2025年3月对应2024-2025学年）
+	 *
+	 * @return 当前学年
+	 */
+	@Operation(summary = "个人账单-获取当前学年")
+	@GetMapping(value = "/getCurrentSchoolYear")
+	public Result<Map<String, String>> getCurrentSchoolYear() {
+		Calendar cal = Calendar.getInstance();
+		int year = cal.get(Calendar.YEAR);
+		int month = cal.get(Calendar.MONTH) + 1;
+
+		String currentSchoolYear;
+		if (month >= 8) {
+			currentSchoolYear = year + "-" + (year + 1);
+		} else {
+			currentSchoolYear = (year - 1) + "-" + year;
+		}
+
+		Map<String, String> result = new HashMap<>();
+		result.put("currentSchoolYear", currentSchoolYear);
+		return Result.OK(result);
 	}
 
 	/**
@@ -367,7 +395,7 @@ public class StudentBillController extends JeecgController<StudentBill, IStudent
 	 * @param request
 	 * @param studentNo
 	 * @param studentName
-//	 * @param className
+	 * @param className
 	 * @param majorName
 	 * @param schoolYear
 	 * @param semester
@@ -387,7 +415,7 @@ public class StudentBillController extends JeecgController<StudentBill, IStudent
 		ModelAndView mv = new ModelAndView(new JeecgEntityExcelView());
 		ExportParams exportParams = new ExportParams("账单汇总", "账单汇总数据");
 		mv.addObject(NormalExcelConstants.PARAMS, exportParams);
-		mv.addObject(NormalExcelConstants.CLASS, StudentBillSummary.class);
+		mv.addObject(NormalExcelConstants.CLASS, StudentBillSummaryExport.class);
 
 		// 构建基础SQL
 		String baseSql = "SELECT * FROM v_student_bill_summary WHERE 1=1";
@@ -434,69 +462,77 @@ public class StudentBillController extends JeecgController<StudentBill, IStudent
 		// 执行查询
 		List<Map<String, Object>> rawList = jdbcTemplate.queryForList(baseSql);
 
-		// 转换为导出实体
-		List<StudentBillSummary> list = new ArrayList<>();
-		BigDecimal totalDiscountPrice = BigDecimal.ZERO;
+		// 按学生分组汇总：将同一学生的第一学期和第二学期费用合并到一行
+		Map<String, StudentBillSummaryExport> studentMap = new LinkedHashMap<>();
+		BigDecimal allTotalFee = BigDecimal.ZERO;
 
 		for (Map<String, Object> record : rawList) {
-			StudentBillSummary summary = new StudentBillSummary();
-
+			String key = "";
 			Object studentNoObj = record.get("studentNo");
-			if (studentNoObj != null)
-				summary.setStudentNo(studentNoObj.toString());
-
-			Object studentNameObj = record.get("studentName");
-			if (studentNameObj != null)
-				summary.setStudentName(studentNameObj.toString());
-
-			Object classNameObj = record.get("className");
-			if (classNameObj != null)
-				summary.setClassName(classNameObj.toString());
-
-			Object collegeNameObj = record.get("collegeName");
-			if (collegeNameObj != null)
-				summary.setCollegeName(collegeNameObj.toString());
-
-			Object majorNameObj = record.get("majorName");
-			if (majorNameObj != null)
-				summary.setMajorName(majorNameObj.toString());
-
-			Object schoolYearObj = record.get("schoolYear");
-			if (schoolYearObj != null)
-				summary.setSchoolYear(schoolYearObj.toString());
-
-			Object semesterObj = record.get("semester");
-			if (semesterObj != null) {
-				String sem = semesterObj.toString();
-				if ("1".equals(sem)) {
-					summary.setSemester("第一学期");
-				} else if ("2".equals(sem)) {
-					summary.setSemester("第二学期");
-				} else {
-					summary.setSemester(sem);
-				}
+			if (studentNoObj != null) {
+				key = studentNoObj.toString();
 			}
 
+			StudentBillSummaryExport summary = studentMap.get(key);
+			if (summary == null) {
+				summary = new StudentBillSummaryExport();
+				if (studentNoObj != null)
+					summary.setStudentNo(studentNoObj.toString());
+
+				Object studentNameObj = record.get("studentName");
+				if (studentNameObj != null)
+					summary.setStudentName(studentNameObj.toString());
+
+				Object collegeNameObj = record.get("collegeName");
+				if (collegeNameObj != null)
+					summary.setCollegeName(collegeNameObj.toString());
+
+				Object majorNameObj = record.get("majorName");
+				if (majorNameObj != null)
+					summary.setMajorName(majorNameObj.toString());
+
+				Object classNameObj = record.get("className");
+				if (classNameObj != null)
+					summary.setClassName(classNameObj.toString());
+
+				// 初始化费用为0
+				summary.setFirstSemesterFee(BigDecimal.ZERO);
+				summary.setSecondSemesterFee(BigDecimal.ZERO);
+				summary.setTotalFee(BigDecimal.ZERO);
+
+				studentMap.put(key, summary);
+			}
+
+			// 根据学期设置费用
+			Object semesterObj = record.get("semester");
 			Object totalDiscountPriceObj = record.get("totalDiscountPrice");
 			if (totalDiscountPriceObj != null) {
 				BigDecimal price = new BigDecimal(totalDiscountPriceObj.toString());
-				summary.setTotalDiscountPrice(price);
-				totalDiscountPrice = totalDiscountPrice.add(price);
+				if (semesterObj != null) {
+					String sem = semesterObj.toString();
+					if ("1".equals(sem)) {
+						summary.setFirstSemesterFee(summary.getFirstSemesterFee().add(price));
+					} else if ("2".equals(sem)) {
+						summary.setSecondSemesterFee(summary.getSecondSemesterFee().add(price));
+					}
+				}
+				// 累加总费用
+				summary.setTotalFee(summary.getTotalFee().add(price));
+				allTotalFee = allTotalFee.add(price);
 			}
-
-			list.add(summary);
 		}
+
+		List<StudentBillSummaryExport> list = new ArrayList<>(studentMap.values());
 
 		// 添加合计行
 		if (!list.isEmpty()) {
-			StudentBillSummary summaryTotal = new StudentBillSummary();
+			StudentBillSummaryExport summaryTotal = new StudentBillSummaryExport();
 			summaryTotal.setStudentNo("");
 			summaryTotal.setStudentName("合计");
 			summaryTotal.setClassName("");
-			summaryTotal.setMajorName("");
-			summaryTotal.setSchoolYear("");
-			summaryTotal.setSemester("");
-			summaryTotal.setTotalDiscountPrice(totalDiscountPrice);
+			summaryTotal.setFirstSemesterFee(BigDecimal.ZERO);
+			summaryTotal.setSecondSemesterFee(BigDecimal.ZERO);
+			summaryTotal.setTotalFee(allTotalFee);
 			list.add(summaryTotal);
 		}
 
@@ -533,7 +569,16 @@ public class StudentBillController extends JeecgController<StudentBill, IStudent
 		paramMap.remove("column");
 		paramMap.remove("order");
 
+		// 提取征订学年参数，从paramMap中移除（手动处理，避免QueryGenerator用LIKE）
+		String subscriptionYear = req.getParameter("subscriptionYear");
+		paramMap.remove("subscriptionYear");
+
 		QueryWrapper<StudentBill> queryWrapper = QueryGenerator.initQueryWrapper(studentBill, paramMap);
+
+		// 手动添加征订学年精确匹配
+		if (oConvertUtils.isNotEmpty(subscriptionYear)) {
+			queryWrapper.eq("subscription_year", subscriptionYear);
+		}
 
 		// 手动处理排序（因为有些字段不在student_bill表中，需要通过关联查询）
 		Map<String, String> columnMapping = new HashMap<>();
@@ -584,8 +629,11 @@ public class StudentBillController extends JeecgController<StudentBill, IStudent
 		if (!isAdmin) {
 			queryWrapper.clear();
 			queryWrapper.eq("student_id", username);
+			if (oConvertUtils.isNotEmpty(subscriptionYear)) {
+				queryWrapper.eq("subscription_year", subscriptionYear);
+			}
 			queryWrapper.orderByDesc("create_time");
-			log.info("【账单列表】学生端过滤条件：student_id = {}", username);
+			log.info("【账单列表】学生端过滤条件：student_id = {}, subscriptionYear = {}", username, subscriptionYear);
 		}
 
 		Page<StudentBill> page = new Page<StudentBill>(pageNo, pageSize);
@@ -646,11 +694,13 @@ public class StudentBillController extends JeecgController<StudentBill, IStudent
 			if (studentIdForClass != null && !studentIdForClass.isEmpty()) {
 				try {
 					String classCollegeSql = "SELECT c.class_name, cl.college_name FROM t_class c INNER JOIN t_student s ON s.class_id = c.id LEFT JOIN t_major m ON c.major_id = m.id LEFT JOIN t_college cl ON m.college_id = cl.id WHERE s.student_id = ? LIMIT 1";
-					List<Map<String, Object>> classCollegeList = jdbcTemplate.queryForList(classCollegeSql, studentIdForClass);
+					List<Map<String, Object>> classCollegeList = jdbcTemplate.queryForList(classCollegeSql,
+							studentIdForClass);
 					if (!classCollegeList.isEmpty()) {
 						Map<String, Object> cc = classCollegeList.get(0);
 						recordMap.put("className", cc.get("class_name") != null ? cc.get("class_name").toString() : "");
-						recordMap.put("collegeName", cc.get("college_name") != null ? cc.get("college_name").toString() : "");
+						recordMap.put("collegeName",
+								cc.get("college_name") != null ? cc.get("college_name").toString() : "");
 					} else {
 						recordMap.put("className", "");
 						recordMap.put("collegeName", "");

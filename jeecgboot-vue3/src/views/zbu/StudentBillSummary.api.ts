@@ -8,6 +8,7 @@ enum Api {
   exportXls = '/zbu/studentBill/exportSummary',
   deleteBatch = '/zbu/studentBill/deleteSummaryBatch',
   getStudentByNo = '/zbu/tStudent/queryByStudentNo',
+  getCurrentSchoolYear = '/zbu/studentBill/getCurrentSchoolYear',
 }
 
 /**
@@ -20,6 +21,13 @@ export const summaryList = (params) => {
 
 export const getStudentByNo = (studentNo) => {
   return defHttp.get({ url: Api.getStudentByNo, params: { studentNo } });
+};
+
+/**
+ * 获取当前学年
+ */
+export const getCurrentSchoolYear = () => {
+  return defHttp.get({ url: Api.getCurrentSchoolYear });
 };
 
 /**

@@ -17,6 +17,7 @@ enum Api {
   getMajorInfo = '/zbu/tMajor/queryById',     // 对齐领取表：专业查询接口
   getTextbookById = '/zbu/tTextbook/queryById',// 对齐领取表：教材查询接口
   batchUpdateReceiveStatus = '/zbu/studentBill/batchUpdateReceiveStatus',// 批量修改领取状态接口
+  getCurrentSchoolYear = '/zbu/studentBill/getCurrentSchoolYear', // 获取当前学年
 }
 
 /**
@@ -111,4 +112,9 @@ export const getTextbookById = (id) => {
 // 批量修改领取状态接口函数
 export const batchUpdateReceiveStatus = (params) => {
   return defHttp.post({url: Api.batchUpdateReceiveStatus, params});
+};
+
+// 获取当前学年
+export const getCurrentSchoolYear = () => {
+  return defHttp.get({url: Api.getCurrentSchoolYear});
 };

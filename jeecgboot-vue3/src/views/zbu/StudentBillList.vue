@@ -70,7 +70,7 @@
 </template>
 
 <script lang="ts" name="zbu-studentBill" setup>
-import {ref, reactive, computed, unref, watch} from 'vue';
+import {ref, reactive, computed, unref, watch, onMounted} from 'vue';
 import {BasicTable, useTable, TableAction} from '/@/components/Table';
 import {useModal} from '/@/components/Modal';
 import { useListPage } from '/@/hooks/system/useListPage'
@@ -78,7 +78,7 @@ import StudentBillModal from './components/StudentBillModal.vue'
 import {columns, searchFormSchema, superQuerySchema} from './StudentBill.data';
 import {
   list, deleteOne, batchDelete, getImportUrl, getExportUrl,
-  syncFromSubscription
+  syncFromSubscription, getCurrentSchoolYear
 } from './StudentBill.api';
 import { useUserStore } from '/@/store/modules/user';
 import { useMessage } from '/@/hooks/web/useMessage';
@@ -171,6 +171,18 @@ const fetchBillList = async (params = {}) => {
       }
       requestParams.studentNo = loginUsername;
       requestParams.student_id = loginUsername;
+    }
+
+    // 如果没有传征订学年参数，调用接口获取当前学年
+    if (!requestParams.subscriptionYear) {
+      try {
+        const yearRes = await getCurrentSchoolYear();
+        if (yearRes && yearRes.currentSchoolYear) {
+          requestParams.subscriptionYear = yearRes.currentSchoolYear;
+        }
+      } catch (e) {
+        console.warn('获取当前学年失败', e);
+      }
     }
 
     const res = await list(requestParams);
@@ -344,7 +356,7 @@ const { tableContext, onExportXls, onImportXls } = useListPage({
       fieldMapToTime: [],
     },
     useSearchForm: unref(isAdmin) || unref(isCounselor),
-    beforeFetch: (params) => {
+    beforeFetch: async (params) => {
       if (params && fieldPickers) {
         for (let key in fieldPickers) {
           if (params[key]) {
@@ -352,7 +364,22 @@ const { tableContext, onExportXls, onImportXls } = useListPage({
           }
         }
       }
-      return params;
+
+      const merged = Object.assign({}, params, queryParam);
+
+      // 如果没有传征订学年参数，调用接口获取当前学年
+      if (!merged.subscriptionYear) {
+        try {
+          const yearRes = await getCurrentSchoolYear();
+          if (yearRes && yearRes.currentSchoolYear) {
+            merged.subscriptionYear = yearRes.currentSchoolYear;
+          }
+        } catch (e) {
+          console.warn('获取当前学年失败', e);
+        }
+      }
+
+      return merged;
     },
   },
   exportConfig: {

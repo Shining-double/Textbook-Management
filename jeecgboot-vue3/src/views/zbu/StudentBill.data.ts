@@ -172,22 +172,31 @@ export const searchFormSchema: FormSchema[] = [
   {
     label: "征订学年",
     field: 'subscriptionYear',
-    component: 'ApiSelect',
-    componentProps: {
-      api: () => defHttp.get({ url: '/zbu/tSubscription/list', params: { pageSize: 1, pageNo: 1 } }).then(() => {
-        // 从数据库动态获取所有不重复的征订学年
-        return defHttp.get({ url: '/zbu/tSubscription/list', params: { pageSize: 99999, pageNo: 1 } }).then(res => {
-          const records = res.records || [];
-          // 提取所有征订学年并去重
-          const years = [...new Set(records.map(item => item.subscriptionYear).filter(Boolean))];
-          // 排序并返回选项
-          return years.sort().map(year => ({
-            label: year,
-            value: year
-          }));
-        });
-      }),
-      placeholder: '请选择征订学年'
+    component: 'JDictSelectTag',
+    componentProps: () => {
+      const now = new Date();
+      const currentYear = now.getFullYear();
+      const currentMonth = now.getMonth() + 1; // 1-12
+
+      // 9月之前（1-8月）：最新一届是去年；9月之后（9-12月）：最新一届是本年
+      const latestGradeYear = currentMonth < 9 ? currentYear - 1 : currentYear;
+
+      // 生成4个选项：从最新一届往前推4年（包括最新一届，用于查看）
+      const options = [];
+      for (let i = 0; i <= 3; i++) {
+        const year = latestGradeYear - i;
+        if (year >= 2020) { // 只显示2020年及之后的
+          options.push({
+            label: `${year}-${year + 1}`,
+            value: `${year}-${year + 1}`
+          });
+        }
+      }
+
+      return {
+        options,
+        placeholder: '请选择征订学年'
+      };
     },
   },
   {

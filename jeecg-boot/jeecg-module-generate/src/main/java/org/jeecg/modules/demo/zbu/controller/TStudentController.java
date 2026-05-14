@@ -795,10 +795,11 @@ public class TStudentController extends JeecgController<TStudent, ITStudentServi
 						String classMajorId = existClass.getMajorId();
 						if (oConvertUtils.isNotEmpty(classMajorId) && !classMajorId.equals(majorIdInput)) {
 							TMajor classMajor = tMajorService.getById(classMajorId);
-							log.warn("第{}行：学号【{}】的专业【{}】与班级【{}】关联的专业【{}】不一致",
-									totalRow, studentId, inputMajor.getMajorName(), existClass.getClassName(),
-									classMajor != null ? classMajor.getMajorName() : classMajorId);
-							// 不强制要求一致，仅警告
+							failMsgList.add("第" + totalRow + "行：学号【" + studentId + "】的专业【"
+									+ inputMajor.getMajorName() + "】与班级【" + existClass.getClassName()
+									+ "】关联的专业【" + (classMajor != null ? classMajor.getMajorName() : classMajorId)
+									+ "】不一致，跳过导入");
+							continue;
 						}
 					} else {
 						// Excel中没有填写专业，使用班级关联的专业
