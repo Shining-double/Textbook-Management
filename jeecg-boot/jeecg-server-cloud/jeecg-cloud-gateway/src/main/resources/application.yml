@@ -3,7 +3,7 @@ server:
 
 knife4j:
   gateway:
-    enabled: true
+    enabled: false
 
 spring:
   application:

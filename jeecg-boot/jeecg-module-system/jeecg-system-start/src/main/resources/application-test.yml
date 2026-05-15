@@ -315,13 +315,20 @@ cas:
 #swagger
 knife4j:
   #开启增强配置
-  enable: true
-  #开启生产环境屏蔽
-  production: false
+  enable: false
+  #开启生产环境屏蔽 (设置为 true 后，/doc.html 和 /swagger-ui.html 将无法访问)
+  production: true
   basic:
     enable: true
     username: jeecg
     password: jeecg1314
+
+#SpringDoc OpenAPI 配置 (禁用后 /v3/api-docs 端点将无法访问)
+springdoc:
+  api-docs:
+    enabled: false
+  swagger-ui:
+    enabled: false
 #第三方登录
 justauth:
   enabled: true

@@ -271,9 +271,9 @@ logging:
 #swagger
 knife4j:
   #开启增强配置
-  enable: true
+  enable: false
   #开启生产环境屏蔽
-  production: false
+  production: true
   basic:
     enable: false
     username: jeecg

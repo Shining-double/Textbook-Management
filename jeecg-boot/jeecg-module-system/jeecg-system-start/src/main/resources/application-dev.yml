@@ -153,7 +153,7 @@ spring:
         master:
           url: jdbc:mysql://127.0.0.1:3306/jeecg-boot?characterEncoding=UTF-8&useUnicode=true&useSSL=false&tinyInt1isBit=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai
           username: root
-          password: root
+          password: 123456
           driver-class-name: com.mysql.cj.jdbc.Driver
 #        # shardingjdbc数据源
 #        sharding-db:
@@ -165,7 +165,7 @@ spring:
       database: 0
       host: 127.0.0.1
       port: 6379
-      password: ""
+      password: 111111
 #mybatis plus 设置
 mybatis-plus:
   mapper-locations: classpath*:org/jeecg/**/xml/*Mapper.xml
@@ -319,13 +319,17 @@ logging:
 #swagger
 knife4j:
   #开启增强配置
-  enable: true
+  enable: false
   #开启生产环境屏蔽
-  production: false
+  production: true
   basic:
     enable: false
     username: jeecg
     password: jeecg1314
+#SpringDoc OpenAPI 配置 (禁用后 /v3/api-docs 端点将无法访问)
+springdoc:
+  api-docs:
+    enabled: false
 #第三方登录
 justauth:
   enabled: true
